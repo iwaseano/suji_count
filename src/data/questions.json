@@ -1,8 +1,0 @@
-[
-  { "questionId": "q1", "discards": ["1m", "2m", "3m", "4m", "5m"], "correctCount": 13 },
-  { "questionId": "q2", "discards": ["1p", "4p", "5p", "8p", "9p"], "correctCount": 13 },
-  { "questionId": "q3", "discards": ["2s", "3s", "4s", "5s", "6s","2z", "3z", "4p", "5s", "1s"], "correctCount": 10 },
-  { "questionId": "q4", "discards": ["1m", "3m", "4m", "6m", "7m"], "correctCount": 14 },
-  { "questionId": "q5", "discards": ["2p", "3p", "5p", "6p", "9p"], "correctCount": 14 },
-  { "questionId": "q6", "discards": ["1s", "2m", "5p", "6s", "8s"], "correctCount": 11 }
-]
