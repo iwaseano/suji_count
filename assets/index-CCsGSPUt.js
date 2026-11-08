@@ -102,51 +102,63 @@ function normalizeQuestion(value) {
   return { questionId, discards, correctCount, level };
 }
 
-function toAbsoluteDataUrl(relativeOrAbsolute) {
+const DATA_PATH_CANDIDATES = ['data', 'suji_count/data'];
+
+function toAbsoluteDataUrl(relativeOrAbsolute, dataRootPath) {
   if (/^https?:\/\//.test(relativeOrAbsolute)) {
     return relativeOrAbsolute;
   }
   const cleaned = relativeOrAbsolute.replace(/^\.?\//, '');
-  return buildAssetPath(`data/${cleaned}`);
+  return buildAssetPath(`${dataRootPath}/${cleaned}`);
 }
 
 async function discoverDataJsonUrls() {
-  const indexUrl = buildAssetPath('data/index.json');
-  const indexResponse = await fetch(indexUrl, { cache: 'no-store' });
-  if (indexResponse.ok) {
-    const files = await indexResponse.json();
-    if (!Array.isArray(files)) {
-      throw new Error('data/index.json must be an array');
+  for (const dataRootPath of DATA_PATH_CANDIDATES) {
+    const indexUrl = buildAssetPath(`${dataRootPath}/index.json`);
+    const indexResponse = await fetch(indexUrl, { cache: 'no-store' });
+    if (indexResponse.ok) {
+      try {
+        const files = await indexResponse.json();
+        if (!Array.isArray(files)) {
+          continue;
+        }
+        const urls = files
+          .filter((value) => typeof value === 'string' && value.trim().endsWith('.json'))
+          .map((value) => toAbsoluteDataUrl(value.trim(), dataRootPath));
+        if (urls.length > 0) {
+          return urls;
+        }
+      } catch (_error) {
+        // ignore non-JSON responses and continue to next candidate path
+      }
     }
-    return files
-      .filter((value) => typeof value === 'string' && value.trim().endsWith('.json'))
-      .map((value) => toAbsoluteDataUrl(value.trim()));
-  }
 
-  const directoryUrl = buildAssetPath('data/');
-  const directoryResponse = await fetch(directoryUrl, { cache: 'no-store' });
-  if (!directoryResponse.ok) {
-    throw new Error('Failed to load data/index.json and data directory listing');
-  }
-  const html = await directoryResponse.text();
-  const urls = [];
-  const pattern = /href="([^"]+\.json)"/g;
-  for (const match of html.matchAll(pattern)) {
-    const href = match[1];
-    if (href.endsWith('index.json')) {
+    const directoryUrl = buildAssetPath(`${dataRootPath}/`);
+    const directoryResponse = await fetch(directoryUrl, { cache: 'no-store' });
+    if (!directoryResponse.ok) {
       continue;
     }
-    if (href.startsWith('/')) {
-      urls.push(href);
-    } else {
-      urls.push(toAbsoluteDataUrl(href));
+    const html = await directoryResponse.text();
+    const urls = [];
+    const pattern = /href="([^"]+\.json)"/g;
+    for (const match of html.matchAll(pattern)) {
+      const href = match[1];
+      if (href.endsWith('index.json')) {
+        continue;
+      }
+      if (href.startsWith('/')) {
+        urls.push(href);
+      } else {
+        urls.push(toAbsoluteDataUrl(href, dataRootPath));
+      }
+    }
+    const unique = [...new Set(urls)];
+    if (unique.length > 0) {
+      return unique;
     }
   }
-  const unique = [...new Set(urls)];
-  if (unique.length === 0) {
-    throw new Error('No JSON files found in data folder');
-  }
-  return unique;
+
+  throw new Error(`Failed to load any data folder. Tried: ${DATA_PATH_CANDIDATES.join(', ')}`);
 }
 
 async function loadQuestionsFromDataFolder() {
