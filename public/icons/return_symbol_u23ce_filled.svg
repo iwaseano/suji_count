@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="256" height="256" viewBox="0 0 805 740"
+     role="img" aria-label="Solid black return symbol">
+  <title>Solid RETURN SYMBOL U+23CE</title>
+  <!-- Outer silhouette of the Noto Sans Symbols 2 U+23CE glyph.
+       The inner contour has been removed so the arrow is fully filled. -->
+  <path
+    d="M296 -21 51 251 296 523V364H472V652H698V253Q698 192 674.5 165Q651 138 583 138H296Z"
+    transform="translate(0 680) scale(1 -1)"
+    fill="#000000"/>
+</svg>
