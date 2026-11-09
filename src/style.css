@@ -260,11 +260,11 @@ button {
   height: 1.6rem;
   display: block;
   background-color: currentColor;
-  mask-image: url('/icons/return_symbol_u23ce_filled.svg');
+  mask-image: var(--return-icon-url);
   mask-repeat: no-repeat;
   mask-position: center;
   mask-size: contain;
-  -webkit-mask-image: url('/icons/return_symbol_u23ce_filled.svg');
+  -webkit-mask-image: var(--return-icon-url);
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center;
   -webkit-mask-size: contain;
