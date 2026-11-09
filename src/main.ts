@@ -26,6 +26,7 @@ type PauseAwareTimer = {
 
 const correctEffectAudio = new Audio(new URL('../mp3/correct_pinpon.mp3', import.meta.url).href);
 const incorrectEffectAudio = new Audio(new URL('../mp3/cancel_invalid.mp3', import.meta.url).href);
+const titleLogoImage = new URL('../assets/logo_image.png', import.meta.url).href;
 const AUDIO_SETTINGS_STORAGE_KEY = 'mahjong-suji-audio-settings';
 const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   bgmVolume: 100,
@@ -493,7 +494,7 @@ function render(): void {
           <button class="settings-open-btn" id="settings-open-btn" aria-label="設定画面を開く">
             <span class="settings-gear-icon" aria-hidden="true">⚙</span>
           </button>
-          <h1 class="title">麻雀スジ残数</h1>
+          <img class="title-logo-image" src="${titleLogoImage}" alt="麻雀筋トレ ロゴ" />
           <p class="subtitle">捨て牌から残っているスジ候補数を数えるMVPトレーニングです。</p>
           <button class="start-btn" id="start-btn" ${isLoadingQuestions || questionLoadError ? 'disabled' : ''}>トレーニング開始</button>
           ${isLoadingQuestions ? '<p class="status-note">問題データを読み込み中です...</p>' : ''}

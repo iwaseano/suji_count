@@ -332,6 +332,13 @@ button {
   gap: 1rem;
 }
 
+.title-logo-image {
+  width: min(100%, 280px);
+  max-height: 160px;
+  object-fit: contain;
+  align-self: center;
+}
+
 .settings-open-btn {
   position: absolute;
   top: 0.9rem;
