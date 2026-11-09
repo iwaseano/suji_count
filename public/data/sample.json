@@ -1,0 +1,20 @@
+[
+  {
+    "questionId": "sample-001",
+    "discards": ["6z", "7z", "5z"],
+    "correctCount": 18,
+    "level": "sample"
+  },
+  {
+    "questionId": "sample-002",
+    "discards": ["1m", "4m", "7m", "2p", "5p", "8p"],
+    "correctCount": 12,
+    "level": "sample"
+  },
+  {
+    "questionId": "sample-003",
+    "discards": ["1s", "9s", "2z", "3z", "4z"],
+    "correctCount": 10,
+    "level": "sample"
+  }
+]
