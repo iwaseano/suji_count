@@ -8,7 +8,7 @@ type Question = {
   level?: string;
 };
 
-type GameState = 'ready' | 'playing' | 'result';
+type GameState = 'ready' | 'playing' | 'result' | 'paused';
 type AnswerEffect = 'correct' | 'incorrect' | null;
 type Screen = 'title' | 'settings' | 'training';
 type AudioSettings = {
@@ -16,6 +16,12 @@ type AudioSettings = {
   bgmMuted: boolean;
   effectVolume: number;
   effectMuted: boolean;
+};
+type PauseAwareTimer = {
+  timerId: number | null;
+  startedAt: number;
+  remainingMs: number;
+  callback: (() => void) | null;
 };
 
 const correctEffectAudio = new Audio(new URL('../mp3/correct_pinpon.mp3', import.meta.url).href);
@@ -45,7 +51,13 @@ let selectedAnswer: number | null = null;
 let totalAnswerCount = 0;
 let correctAnswerCount = 0;
 let answerEffect: AnswerEffect = null;
-let answerEffectTimer: number | null = null;
+let stateBeforePause: Exclude<GameState, 'paused'> = 'playing';
+const answerEffectTimer: PauseAwareTimer = {
+  timerId: null,
+  startedAt: 0,
+  remainingMs: 0,
+  callback: null,
+};
 let audioSettings: AudioSettings = loadAudioSettings();
 let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
@@ -251,10 +263,82 @@ async function initializeQuestions(): Promise<void> {
 }
 
 function stopAnswerEffectTimer(): void {
-  if (answerEffectTimer !== null) {
-    window.clearTimeout(answerEffectTimer);
-    answerEffectTimer = null;
+  if (answerEffectTimer.timerId !== null) {
+    window.clearTimeout(answerEffectTimer.timerId);
   }
+  answerEffectTimer.timerId = null;
+  answerEffectTimer.startedAt = 0;
+  answerEffectTimer.remainingMs = 0;
+  answerEffectTimer.callback = null;
+}
+
+function pauseAnswerEffectTimer(): void {
+  if (answerEffectTimer.timerId === null) {
+    return;
+  }
+  window.clearTimeout(answerEffectTimer.timerId);
+  answerEffectTimer.timerId = null;
+  const elapsed = Date.now() - answerEffectTimer.startedAt;
+  answerEffectTimer.remainingMs = Math.max(0, answerEffectTimer.remainingMs - elapsed);
+}
+
+function resumeAnswerEffectTimer(): void {
+  if (answerEffectTimer.timerId !== null || answerEffectTimer.callback === null || answerEffectTimer.remainingMs <= 0) {
+    return;
+  }
+  answerEffectTimer.startedAt = Date.now();
+  answerEffectTimer.timerId = window.setTimeout(() => {
+    const callback = answerEffectTimer.callback;
+    stopAnswerEffectTimer();
+    callback?.();
+  }, answerEffectTimer.remainingMs);
+}
+
+function startAnswerEffectTimer(durationMs: number, callback: () => void): void {
+  stopAnswerEffectTimer();
+  answerEffectTimer.remainingMs = durationMs;
+  answerEffectTimer.callback = callback;
+  resumeAnswerEffectTimer();
+}
+
+function pauseGameTimers(): void {
+  pauseAnswerEffectTimer();
+}
+
+function resumeGameTimers(): void {
+  resumeAnswerEffectTimer();
+}
+
+function pauseGame(): void {
+  if (screen !== 'training' || state === 'ready' || state === 'paused') {
+    return;
+  }
+  stateBeforePause = state;
+  state = 'paused';
+  pauseGameTimers();
+  render();
+}
+
+function resumeGame(): void {
+  if (state !== 'paused') {
+    return;
+  }
+  state = stateBeforePause;
+  resumeGameTimers();
+  render();
+}
+
+function returnToTitleFromPause(): void {
+  stopAnswerEffectTimer();
+  answerEffect = null;
+  state = 'ready';
+  screen = 'title';
+  questions = [...initialQuestions];
+  currentQuestion = null;
+  selectedAnswer = null;
+  totalAnswerCount = 0;
+  correctAnswerCount = 0;
+  render();
 }
 
 function goToNextQuestion(): void {
@@ -432,8 +516,9 @@ function render(): void {
     return;
   }
 
+  const isPaused = state === 'paused';
   const isEffectActive = answerEffect !== null;
-  const isAnswerLocked = state === 'result' || isEffectActive;
+  const isAnswerLocked = state === 'result' || isEffectActive || isPaused;
   const discardRows = chunkDiscards(currentQuestion?.discards ?? []);
 
   root.innerHTML = `
@@ -451,11 +536,22 @@ function render(): void {
           <span class="status-label">正答率</span>
           <span class="status-value">${accuracy}</span>
         </div>
+        <button class="pause-btn" id="pause-btn" aria-label="一時停止" ${isPaused ? 'disabled' : ''}>
+          <span class="pause-icon" aria-hidden="true">⏸</span>
+        </button>
       </header>
 
       <main class="board">
         <div class="tile-area ${isEffectActive ? 'answer-effect' : ''}">
-          ${isEffectActive ? `
+          ${isPaused ? `
+            <div class="pause-overlay" aria-live="polite" aria-label="一時停止中">
+              <p class="pause-title">Pause</p>
+              <div class="pause-actions">
+                <button class="next-btn pause-action-btn" id="pause-title-btn">タイトルに戻る</button>
+                <button class="confirm-btn pause-action-btn" id="pause-resume-btn">ゲームを続行する</button>
+              </div>
+            </div>
+          ` : isEffectActive ? `
             <div class="correct-overlay ${answerEffect === 'incorrect' ? 'incorrect-overlay' : ''}" aria-live="polite" aria-label="判定エフェクト">
               <span class="correct-effect-text ${answerEffect === 'incorrect' ? 'incorrect-effect-text' : ''}">
                 ${answerEffect === 'incorrect' ? '×' : '○'}
@@ -527,18 +623,18 @@ function render(): void {
     render();
 
     if (isCorrect) {
-      answerEffectTimer = window.setTimeout(() => {
+      startAnswerEffectTimer(2000, () => {
         goToNextQuestion();
-      }, 2000);
+      });
       return;
     }
 
-    answerEffectTimer = window.setTimeout(() => {
+    startAnswerEffectTimer(1000, () => {
       answerEffect = null;
       state = 'playing';
       selectedAnswer = null;
       render();
-    }, 1000);
+    });
   };
 
   const confirmButton = document.querySelector('#confirm-btn');
@@ -553,6 +649,21 @@ function render(): void {
       return;
     }
     goToNextQuestion();
+  });
+
+  const pauseButton = document.querySelector<HTMLButtonElement>('#pause-btn');
+  pauseButton?.addEventListener('click', () => {
+    pauseGame();
+  });
+
+  const pauseTitleButton = document.querySelector<HTMLButtonElement>('#pause-title-btn');
+  pauseTitleButton?.addEventListener('click', () => {
+    returnToTitleFromPause();
+  });
+
+  const pauseResumeButton = document.querySelector<HTMLButtonElement>('#pause-resume-btn');
+  pauseResumeButton?.addEventListener('click', () => {
+    resumeGame();
   });
 }
 
