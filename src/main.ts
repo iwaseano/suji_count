@@ -64,6 +64,7 @@ let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
 
 applyEffectAudioSettings();
+applyUiAssetPaths();
 
 const QUESTION_FETCH_TIMEOUT_MS = 15000;
 const QUESTION_INIT_TIMEOUT_MS = 20000;
@@ -112,6 +113,13 @@ function applyEffectAudioSettings(): void {
   const effectVolume = getEffectiveVolume('effect');
   correctEffectAudio.volume = effectVolume;
   incorrectEffectAudio.volume = effectVolume;
+}
+
+function applyUiAssetPaths(): void {
+  document.documentElement.style.setProperty(
+    '--return-icon-url',
+    `url("${buildAssetPath('icons/return_symbol_u23ce_filled.svg')}")`,
+  );
 }
 
 function buildAssetPath(path: string): string {
