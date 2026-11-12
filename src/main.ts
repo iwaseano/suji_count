@@ -662,11 +662,6 @@ function render(): void {
   }
 
   if (screen === 'modeSelect') {
-    const selectedModeLabel = selectedGameMode === 'training'
-      ? 'training'
-      : selectedGameMode === 'timeChallenge'
-        ? 'time challenge'
-        : 'time attack';
     root.innerHTML = `
       <div class="center-card">
         <div class="mode-select-screen">
