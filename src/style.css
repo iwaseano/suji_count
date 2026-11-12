@@ -138,6 +138,48 @@ button {
   background: #111827;
 }
 
+.countdown-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: #111827;
+  pointer-events: all;
+}
+
+.countdown-message {
+  margin: 0;
+  color: #f8fafc;
+  font-size: clamp(1.1rem, 4.5vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.countdown-ring {
+  width: 180px;
+  height: 180px;
+  margin-top: 0.5rem;
+  border-radius: 9999px;
+  border: 6px solid rgba(248, 250, 252, 0.9);
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: countdown-ring-pulse 0.7s ease-out forwards;
+}
+
+.countdown-text {
+  color: #f8fafc;
+  font-size: clamp(2rem, 10vw, 3rem);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  animation: countdown-text-pop 0.7s ease-out forwards;
+}
+
 .pause-title {
   margin: 0;
   color: #f9fafb;
@@ -540,6 +582,36 @@ button {
   100% {
     opacity: 0;
     transform: scale(1.08);
+  }
+}
+
+@keyframes countdown-ring-pulse {
+  0% {
+    transform: scale(0.78);
+    opacity: 0.35;
+  }
+  45% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+}
+
+@keyframes countdown-text-pop {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 

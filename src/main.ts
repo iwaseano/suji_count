@@ -8,7 +8,7 @@ type Question = {
   level?: string;
 };
 
-type GameState = 'ready' | 'playing' | 'result' | 'paused';
+type GameState = 'ready' | 'countdown' | 'playing' | 'result' | 'paused';
 type AnswerEffect = 'correct' | 'incorrect' | null;
 type Screen = 'title' | 'settings' | 'training';
 type AudioSettings = {
@@ -22,6 +22,14 @@ type PauseAwareTimer = {
   startedAt: number;
   remainingMs: number;
   callback: (() => void) | null;
+};
+type CountdownState = {
+  isActive: boolean;
+  labels: string[];
+  currentIndex: number;
+  timerId: number | null;
+  stepMs: number;
+  onComplete: (() => void) | null;
 };
 
 const correctEffectAudio = new Audio(new URL('../mp3/correct_pinpon.mp3', import.meta.url).href);
@@ -39,6 +47,46 @@ const app = document.querySelector('#app') as HTMLElement | null;
 
 if (!app) {
   throw new Error('App root not found');
+}
+
+function stopCountdown(): void {
+  if (countdownState.timerId !== null) {
+    window.clearTimeout(countdownState.timerId);
+  }
+  countdownState.isActive = false;
+  countdownState.labels = [];
+  countdownState.currentIndex = 0;
+  countdownState.timerId = null;
+  countdownState.stepMs = GAME_START_COUNTDOWN_STEP_MS;
+  countdownState.onComplete = null;
+}
+
+function advanceCountdown(): void {
+  if (!countdownState.isActive) {
+    return;
+  }
+  if (countdownState.currentIndex >= countdownState.labels.length) {
+    const callback = countdownState.onComplete;
+    stopCountdown();
+    callback?.();
+    return;
+  }
+  render();
+  countdownState.timerId = window.setTimeout(() => {
+    countdownState.currentIndex += 1;
+    advanceCountdown();
+  }, countdownState.stepMs);
+}
+
+function startCountdown(labels: string[], stepMs: number, onComplete: () => void): void {
+  stopCountdown();
+  countdownState.isActive = true;
+  countdownState.labels = labels;
+  countdownState.currentIndex = 0;
+  countdownState.stepMs = stepMs;
+  countdownState.onComplete = onComplete;
+  state = 'countdown';
+  advanceCountdown();
 }
 
 const root = app;
@@ -63,12 +111,22 @@ let audioSettings: AudioSettings = loadAudioSettings();
 let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
 let isHowToModalOpen = false;
+const countdownState: CountdownState = {
+  isActive: false,
+  labels: [],
+  currentIndex: 0,
+  timerId: null,
+  stepMs: 700,
+  onComplete: null,
+};
 
 applyEffectAudioSettings();
 applyUiAssetPaths();
 
 const QUESTION_FETCH_TIMEOUT_MS = 15000;
 const QUESTION_INIT_TIMEOUT_MS = 20000;
+const GAME_START_COUNTDOWN_LABELS = ['3', '2', '1', 'START!'];
+const GAME_START_COUNTDOWN_STEP_MS = 700;
 
 function clampVolume(volume: number): number {
   return Math.min(100, Math.max(0, Math.round(volume)));
@@ -320,7 +378,7 @@ function resumeGameTimers(): void {
 }
 
 function pauseGame(): void {
-  if (screen !== 'training' || state === 'ready' || state === 'paused') {
+  if (screen !== 'training' || state === 'ready' || state === 'countdown' || state === 'paused') {
     return;
   }
   stateBeforePause = state;
@@ -340,6 +398,7 @@ function resumeGame(): void {
 
 function returnToTitleFromPause(): void {
   stopAnswerEffectTimer();
+  stopCountdown();
   answerEffect = null;
   state = 'ready';
   screen = 'title';
@@ -353,6 +412,7 @@ function returnToTitleFromPause(): void {
 
 function goToNextQuestion(): void {
   stopAnswerEffectTimer();
+  stopCountdown();
   answerEffect = null;
 
   const nextQuestion = getRandomQuestion();
@@ -553,9 +613,11 @@ function render(): void {
   }
 
   const isPaused = state === 'paused';
+  const isCountdown = state === 'countdown' && countdownState.isActive;
   const isEffectActive = answerEffect !== null;
-  const isAnswerLocked = state === 'result' || isEffectActive || isPaused;
+  const isAnswerLocked = state === 'result' || isEffectActive || isPaused || isCountdown;
   const discardRows = chunkDiscards(currentQuestion?.discards ?? []);
+  const countdownLabel = countdownState.labels[countdownState.currentIndex] ?? '';
 
   root.innerHTML = `
     <div class="app">
@@ -572,14 +634,21 @@ function render(): void {
           <span class="status-label">正答率</span>
           <span class="status-value">${accuracy}</span>
         </div>
-        <button class="pause-btn" id="pause-btn" aria-label="一時停止" ${isPaused ? 'disabled' : ''}>
+        <button class="pause-btn" id="pause-btn" aria-label="一時停止" ${isPaused || isCountdown ? 'disabled' : ''}>
           <span class="pause-icon" aria-hidden="true">⏸</span>
         </button>
       </header>
 
       <main class="board">
         <div class="tile-area ${isEffectActive ? 'answer-effect' : ''}">
-          ${isPaused ? `
+          ${isCountdown ? `
+            <div class="countdown-overlay" aria-live="assertive" aria-label="カウントダウン">
+              <p class="countdown-message">捨牌から残っているスジを数えろ！</p>
+              <div class="countdown-ring">
+                <span class="countdown-text">${countdownLabel}</span>
+              </div>
+            </div>
+          ` : isPaused ? `
             <div class="pause-overlay" aria-live="polite" aria-label="一時停止中">
               <p class="pause-title">Pause</p>
               <div class="pause-actions">
@@ -630,7 +699,7 @@ function render(): void {
 
   document.querySelectorAll<HTMLButtonElement>('.answer-btn[data-value]').forEach((button) => {
     button.addEventListener('click', () => {
-      if (state === 'result' || answerEffect !== null) {
+      if (state !== 'playing' || answerEffect !== null) {
         return;
       }
       const raw = button.dataset.value;
@@ -644,7 +713,7 @@ function render(): void {
   });
 
   const submitCurrentAnswer = (): void => {
-    if (selectedAnswer === null || !currentQuestion || state === 'result' || answerEffect !== null) {
+    if (selectedAnswer === null || !currentQuestion || state !== 'playing' || answerEffect !== null) {
       return;
     }
 
@@ -705,6 +774,7 @@ function render(): void {
 
 function startGame(): void {
   stopAnswerEffectTimer();
+  stopCountdown();
   answerEffect = null;
   isHowToModalOpen = false;
   screen = 'training';
@@ -713,8 +783,15 @@ function startGame(): void {
   selectedAnswer = null;
   totalAnswerCount = 0;
   correctAnswerCount = 0;
-  state = currentQuestion ? 'playing' : 'ready';
-  render();
+  if (!currentQuestion) {
+    state = 'ready';
+    render();
+    return;
+  }
+  startCountdown(GAME_START_COUNTDOWN_LABELS, GAME_START_COUNTDOWN_STEP_MS, () => {
+    state = 'playing';
+    render();
+  });
 }
 
 render();
