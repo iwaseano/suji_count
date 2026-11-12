@@ -5,12 +5,14 @@ type Question = {
   questionId: string;
   discards: string[];
   correctCount: number;
-  level?: string;
+  level?: string | number;
 };
 
 type GameState = 'ready' | 'countdown' | 'playing' | 'result' | 'paused';
 type AnswerEffect = 'correct' | 'incorrect' | null;
-type Screen = 'title' | 'settings' | 'training';
+type Screen = 'title' | 'settings' | 'modeSelect' | 'training';
+type GameMode = 'training' | 'timeChallenge' | 'timeAttack';
+type Difficulty = 'easy' | 'advanced' | 'expert';
 type AudioSettings = {
   bgmVolume: number;
   bgmMuted: boolean;
@@ -111,6 +113,9 @@ let audioSettings: AudioSettings = loadAudioSettings();
 let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
 let isHowToModalOpen = false;
+let selectedGameMode: GameMode = 'training';
+let selectedDifficulty: Difficulty = 'expert';
+let modeSelectError: string | null = null;
 const countdownState: CountdownState = {
   isActive: false,
   labels: [],
@@ -241,8 +246,46 @@ function normalizeQuestionRecord(record: unknown, fallbackId: string): Question 
     questionId,
     discards: raw.discards,
     correctCount,
-    level: typeof raw.level === 'string' ? raw.level : undefined,
+    level: typeof raw.level === 'string' || typeof raw.level === 'number' ? raw.level : undefined,
   };
+}
+
+function parseQuestionLevelRank(level: Question['level']): number | null {
+  if (typeof level === 'number' && Number.isFinite(level)) {
+    return level;
+  }
+  if (typeof level !== 'string') {
+    return null;
+  }
+  const normalized = level.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  if (normalized === 'beginner' || normalized === 'easy') {
+    return 1;
+  }
+  if (normalized === 'intermediate') {
+    return 2;
+  }
+  if (normalized === 'advanced') {
+    return 3;
+  }
+  return null;
+}
+
+function filterQuestionsByDifficulty(allQuestions: Question[], difficulty: Difficulty): Question[] {
+  if (difficulty === 'expert') {
+    return [...allQuestions];
+  }
+  const maxRank = difficulty === 'easy' ? 1 : 2;
+  return allQuestions.filter((question) => {
+    const rank = parseQuestionLevelRank(question.level);
+    return rank !== null && rank <= maxRank;
+  });
 }
 
 async function fetchQuestionsFromDataRoot(dataRootPath: string): Promise<Question[]> {
@@ -421,6 +464,7 @@ function goToNextQuestion(): void {
     questions = [...initialQuestions];
     selectedAnswer = null;
     state = 'ready';
+    screen = 'title';
     render();
     return;
   }
@@ -556,7 +600,7 @@ function render(): void {
     return;
   }
 
-  if (screen === 'title' || state === 'ready') {
+  if (screen === 'title') {
     root.innerHTML = `
       <div class="center-card">
         <div class="start-screen">
@@ -588,7 +632,12 @@ function render(): void {
     `;
 
     const startButton = document.querySelector('#start-btn');
-    startButton?.addEventListener('click', startGame);
+    startButton?.addEventListener('click', () => {
+      isHowToModalOpen = false;
+      modeSelectError = null;
+      screen = 'modeSelect';
+      render();
+    });
     const settingsOpenButton = document.querySelector<HTMLButtonElement>('#settings-open-btn');
     settingsOpenButton?.addEventListener('click', () => {
       isHowToModalOpen = false;
@@ -608,6 +657,85 @@ function render(): void {
     const retryLoadButton = document.querySelector<HTMLButtonElement>('#retry-load-btn');
     retryLoadButton?.addEventListener('click', () => {
       void initializeQuestions();
+    });
+    return;
+  }
+
+  if (screen === 'modeSelect') {
+    const selectedModeLabel = selectedGameMode === 'training'
+      ? 'training'
+      : selectedGameMode === 'timeChallenge'
+        ? 'time challenge'
+        : 'time attack';
+    root.innerHTML = `
+      <div class="center-card">
+        <div class="mode-select-screen">
+          <h1 class="mode-select-title">モード・難易度選択</h1>
+
+          <section class="mode-select-section">
+            <h2 class="mode-select-heading">ゲームモード</h2>
+            <div class="mode-select-grid">
+              <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn">training</button>
+              <button class="mode-option-btn is-disabled" id="mode-time-challenge-btn" disabled>time challenge（未実装）</button>
+              <button class="mode-option-btn is-disabled" id="mode-time-attack-btn" disabled>time attack（未実装）</button>
+            </div>
+          </section>
+
+          <section class="mode-select-section">
+            <h2 class="mode-select-heading">難易度</h2>
+            <div class="mode-select-grid">
+              <button class="mode-option-btn ${selectedDifficulty === 'easy' ? 'is-selected' : ''}" id="difficulty-easy-btn">Easy</button>
+              <button class="mode-option-btn ${selectedDifficulty === 'advanced' ? 'is-selected' : ''}" id="difficulty-advanced-btn">advanced</button>
+              <button class="mode-option-btn ${selectedDifficulty === 'expert' ? 'is-selected' : ''}" id="difficulty-expert-btn">Expert</button>
+            </div>
+          </section>
+
+          ${modeSelectError ? `<p class="error-note">${modeSelectError}</p>` : ''}
+
+          <div class="mode-select-actions">
+            <button class="start-btn" id="mode-select-start-btn">ゲーム開始</button>
+            <button class="next-btn" id="mode-select-back-btn">タイトルへ戻る</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const trainingModeButton = document.querySelector<HTMLButtonElement>('#mode-training-btn');
+    trainingModeButton?.addEventListener('click', () => {
+      selectedGameMode = 'training';
+      modeSelectError = null;
+      render();
+    });
+
+    const difficultyEasyButton = document.querySelector<HTMLButtonElement>('#difficulty-easy-btn');
+    difficultyEasyButton?.addEventListener('click', () => {
+      selectedDifficulty = 'easy';
+      modeSelectError = null;
+      render();
+    });
+
+    const difficultyAdvancedButton = document.querySelector<HTMLButtonElement>('#difficulty-advanced-btn');
+    difficultyAdvancedButton?.addEventListener('click', () => {
+      selectedDifficulty = 'advanced';
+      modeSelectError = null;
+      render();
+    });
+
+    const difficultyExpertButton = document.querySelector<HTMLButtonElement>('#difficulty-expert-btn');
+    difficultyExpertButton?.addEventListener('click', () => {
+      selectedDifficulty = 'expert';
+      modeSelectError = null;
+      render();
+    });
+
+    const modeSelectStartButton = document.querySelector<HTMLButtonElement>('#mode-select-start-btn');
+    modeSelectStartButton?.addEventListener('click', startGame);
+
+    const modeSelectBackButton = document.querySelector<HTMLButtonElement>('#mode-select-back-btn');
+    modeSelectBackButton?.addEventListener('click', () => {
+      modeSelectError = null;
+      screen = 'title';
+      render();
     });
     return;
   }
@@ -773,17 +901,28 @@ function render(): void {
 }
 
 function startGame(): void {
+  if (selectedGameMode !== 'training') {
+    modeSelectError = '選択したゲームモードは未実装です。training を選択してください。';
+    screen = 'modeSelect';
+    state = 'ready';
+    render();
+    return;
+  }
+
   stopAnswerEffectTimer();
   stopCountdown();
   answerEffect = null;
   isHowToModalOpen = false;
+  modeSelectError = null;
   screen = 'training';
-  questions = [...initialQuestions];
+  questions = filterQuestionsByDifficulty(initialQuestions, selectedDifficulty);
   currentQuestion = getRandomQuestion();
   selectedAnswer = null;
   totalAnswerCount = 0;
   correctAnswerCount = 0;
   if (!currentQuestion) {
+    modeSelectError = '選択した難易度に該当する問題がありません。難易度を変更してください。';
+    screen = 'modeSelect';
     state = 'ready';
     render();
     return;
