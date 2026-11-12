@@ -62,6 +62,7 @@ const answerEffectTimer: PauseAwareTimer = {
 let audioSettings: AudioSettings = loadAudioSettings();
 let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
+let isHowToModalOpen = false;
 
 applyEffectAudioSettings();
 applyUiAssetPaths();
@@ -505,8 +506,23 @@ function render(): void {
           <img class="title-logo-image" src="${titleLogoImage}" alt="麻雀筋トレ ロゴ" />
           <p class="subtitle">捨て牌から残っているスジ候補数を数えるMVPトレーニングです。</p>
           <button class="start-btn" id="start-btn" ${isLoadingQuestions || questionLoadError ? 'disabled' : ''}>トレーニング開始</button>
+          <button class="next-btn how-to-btn" id="how-to-btn">遊び方</button>
           ${isLoadingQuestions ? '<p class="status-note">問題データを読み込み中です...</p>' : ''}
           ${questionLoadError ? `<p class="error-note">${questionLoadError}</p><button class="next-btn" id="retry-load-btn">再読み込み</button>` : ''}
+          ${isHowToModalOpen ? `
+            <div class="how-to-overlay" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
+              <div class="how-to-modal">
+                <button class="how-to-close-btn" id="how-to-close-btn" aria-label="遊び方を閉じる">×</button>
+                <h2 class="how-to-title" id="how-to-title">遊び方</h2>
+                <p class="how-to-text">ここに遊び方の説明文を記載します。</p>
+                <ul class="how-to-list">
+                  <li>捨て牌を見て、残っているスジ候補数を数えます。</li>
+                  <li>下の数字ボタンから回答を選んで確定します。</li>
+                  <li>正解・不正解の表示後、次の問題へ進みます。</li>
+                </ul>
+              </div>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
@@ -515,7 +531,18 @@ function render(): void {
     startButton?.addEventListener('click', startGame);
     const settingsOpenButton = document.querySelector<HTMLButtonElement>('#settings-open-btn');
     settingsOpenButton?.addEventListener('click', () => {
+      isHowToModalOpen = false;
       screen = 'settings';
+      render();
+    });
+    const howToButton = document.querySelector<HTMLButtonElement>('#how-to-btn');
+    howToButton?.addEventListener('click', () => {
+      isHowToModalOpen = true;
+      render();
+    });
+    const howToCloseButton = document.querySelector<HTMLButtonElement>('#how-to-close-btn');
+    howToCloseButton?.addEventListener('click', () => {
+      isHowToModalOpen = false;
       render();
     });
     const retryLoadButton = document.querySelector<HTMLButtonElement>('#retry-load-btn');
@@ -679,6 +706,7 @@ function render(): void {
 function startGame(): void {
   stopAnswerEffectTimer();
   answerEffect = null;
+  isHowToModalOpen = false;
   screen = 'training';
   questions = [...initialQuestions];
   currentQuestion = getRandomQuestion();

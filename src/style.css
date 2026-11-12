@@ -339,6 +339,62 @@ button {
   align-self: center;
 }
 
+.how-to-btn {
+  background: #334155;
+}
+
+.how-to-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.how-to-modal {
+  position: relative;
+  width: min(100%, 360px);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(17, 24, 39, 0.18);
+  padding: 1.2rem 1rem 1rem;
+}
+
+.how-to-close-btn {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.how-to-title {
+  margin: 0 0 0.7rem;
+  font-size: 1.1rem;
+}
+
+.how-to-text {
+  margin: 0 0 0.55rem;
+  color: #334155;
+}
+
+.how-to-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #334155;
+  display: grid;
+  gap: 0.35rem;
+}
+
 .settings-open-btn {
   position: absolute;
   top: 0.9rem;
