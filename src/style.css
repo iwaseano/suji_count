@@ -68,6 +68,24 @@ button {
   font-weight: 700;
 }
 
+.time-attack-time-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.time-attack-penalty {
+  opacity: 0;
+  color: #dc2626;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: opacity 0.12s ease;
+}
+
+.time-attack-penalty.is-visible {
+  opacity: 1;
+}
+
 .pause-btn {
   margin-left: auto;
   width: 2.4rem;
@@ -543,6 +561,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.time-attack-result-value {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .settings-title {
