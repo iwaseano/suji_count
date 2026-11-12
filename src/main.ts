@@ -10,7 +10,7 @@ type Question = {
 
 type GameState = 'ready' | 'countdown' | 'playing' | 'result' | 'paused';
 type AnswerEffect = 'correct' | 'incorrect' | null;
-type Screen = 'title' | 'settings' | 'modeSelect' | 'training';
+type Screen = 'title' | 'settings' | 'modeSelect' | 'training' | 'timeAttackResult';
 type GameMode = 'training' | 'timeChallenge' | 'timeAttack';
 type Difficulty = 'easy' | 'advanced' | 'expert';
 type AudioSettings = {
@@ -116,6 +116,14 @@ let isHowToModalOpen = false;
 let selectedGameMode: GameMode = 'training';
 let selectedDifficulty: Difficulty = 'expert';
 let modeSelectError: string | null = null;
+let timeAttackAnsweredCount = 0;
+let timeAttackIncorrectCount = 0;
+let timeAttackElapsedMs = 0;
+let timeAttackPenaltyMs = 0;
+let timeAttackStartedAt: number | null = null;
+let timeAttackTickTimerId: number | null = null;
+let timeAttackResultTimeMs = 0;
+let timeAttackPenaltyNoticeUntil = 0;
 const countdownState: CountdownState = {
   isActive: false,
   labels: [],
@@ -132,6 +140,9 @@ const QUESTION_FETCH_TIMEOUT_MS = 15000;
 const QUESTION_INIT_TIMEOUT_MS = 20000;
 const GAME_START_COUNTDOWN_LABELS = ['3', '2', '1', 'START!'];
 const GAME_START_COUNTDOWN_STEP_MS = 700;
+const TIME_ATTACK_QUESTION_LIMIT = 20;
+const TIME_ATTACK_INCORRECT_PENALTY_MS = 5000;
+const TIME_ATTACK_TICK_INTERVAL_MS = 30;
 
 function clampVolume(volume: number): number {
   return Math.min(100, Math.max(0, Math.round(volume)));
@@ -414,10 +425,17 @@ function startAnswerEffectTimer(durationMs: number, callback: () => void): void 
 
 function pauseGameTimers(): void {
   pauseAnswerEffectTimer();
+  if (selectedGameMode === 'timeAttack') {
+    pauseTimeAttackClock();
+    stopTimeAttackTickTimer();
+  }
 }
 
 function resumeGameTimers(): void {
   resumeAnswerEffectTimer();
+  if (selectedGameMode === 'timeAttack' && stateBeforePause === 'playing') {
+    startTimeAttackClock();
+  }
 }
 
 function pauseGame(): void {
@@ -442,6 +460,8 @@ function resumeGame(): void {
 function returnToTitleFromPause(): void {
   stopAnswerEffectTimer();
   stopCountdown();
+  pauseTimeAttackClock();
+  stopTimeAttackTickTimer();
   answerEffect = null;
   state = 'ready';
   screen = 'title';
@@ -450,6 +470,7 @@ function returnToTitleFromPause(): void {
   selectedAnswer = null;
   totalAnswerCount = 0;
   correctAnswerCount = 0;
+  resetTimeAttackState();
   render();
 }
 
@@ -458,8 +479,17 @@ function goToNextQuestion(): void {
   stopCountdown();
   answerEffect = null;
 
+  if (selectedGameMode === 'timeAttack' && timeAttackAnsweredCount >= TIME_ATTACK_QUESTION_LIMIT) {
+    finishTimeAttack();
+    return;
+  }
+
   const nextQuestion = getRandomQuestion();
   if (!nextQuestion) {
+    if (selectedGameMode === 'timeAttack') {
+      finishTimeAttack();
+      return;
+    }
     currentQuestion = null;
     questions = [...initialQuestions];
     selectedAnswer = null;
@@ -505,6 +535,97 @@ function playEffectAudio(effect: Exclude<AnswerEffect, null>): void {
   void targetAudio.play().catch((error: unknown) => {
     console.error(`Failed to play ${effect} effect audio.`, error);
   });
+}
+
+function resetTimeAttackState(): void {
+  timeAttackAnsweredCount = 0;
+  timeAttackIncorrectCount = 0;
+  timeAttackElapsedMs = 0;
+  timeAttackPenaltyMs = 0;
+  timeAttackStartedAt = null;
+  timeAttackResultTimeMs = 0;
+  timeAttackPenaltyNoticeUntil = 0;
+  stopTimeAttackTickTimer();
+}
+
+function stopTimeAttackTickTimer(): void {
+  if (timeAttackTickTimerId !== null) {
+    window.clearInterval(timeAttackTickTimerId);
+    timeAttackTickTimerId = null;
+  }
+}
+
+function startTimeAttackTickTimer(): void {
+  if (timeAttackTickTimerId !== null) {
+    return;
+  }
+  timeAttackTickTimerId = window.setInterval(() => {
+    updateTimeAttackElapsedDisplay();
+  }, TIME_ATTACK_TICK_INTERVAL_MS);
+}
+
+function startTimeAttackClock(): void {
+  if (timeAttackStartedAt !== null) {
+    return;
+  }
+  timeAttackStartedAt = Date.now();
+  startTimeAttackTickTimer();
+}
+
+function pauseTimeAttackClock(): void {
+  if (timeAttackStartedAt === null) {
+    return;
+  }
+  timeAttackElapsedMs += Date.now() - timeAttackStartedAt;
+  timeAttackStartedAt = null;
+}
+
+function getTimeAttackTotalMs(): number {
+  const runningElapsed = timeAttackStartedAt === null ? 0 : Date.now() - timeAttackStartedAt;
+  return timeAttackElapsedMs + runningElapsed + timeAttackPenaltyMs;
+}
+
+function updateTimeAttackElapsedDisplay(): void {
+  if (screen !== 'training' || selectedGameMode !== 'timeAttack' || state !== 'playing') {
+    return;
+  }
+  const elapsedElement = document.querySelector<HTMLElement>('#time-attack-elapsed');
+  if (!elapsedElement) {
+    return;
+  }
+  elapsedElement.textContent = formatTimeAttackMs(getTimeAttackTotalMs());
+  updateTimeAttackPenaltyDisplay();
+}
+
+function updateTimeAttackPenaltyDisplay(): void {
+  const penaltyElement = document.querySelector<HTMLElement>('#time-attack-penalty');
+  if (!penaltyElement) {
+    return;
+  }
+  const shouldShow = screen === 'training'
+    && selectedGameMode === 'timeAttack'
+    && Date.now() < timeAttackPenaltyNoticeUntil;
+  penaltyElement.classList.toggle('is-visible', shouldShow);
+}
+
+function formatTimeAttackMs(totalMs: number): string {
+  const clamped = Math.max(0, Math.floor(totalMs));
+  const minutes = Math.floor(clamped / 60000);
+  const seconds = Math.floor((clamped % 60000) / 1000);
+  const centiseconds = Math.floor((clamped % 1000) / 10);
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}:${String(centiseconds).padStart(2, '0')}`;
+}
+
+function finishTimeAttack(): void {
+  pauseTimeAttackClock();
+  stopTimeAttackTickTimer();
+  timeAttackResultTimeMs = getTimeAttackTotalMs();
+  state = 'ready';
+  screen = 'timeAttackResult';
+  answerEffect = null;
+  selectedAnswer = null;
+  currentQuestion = null;
+  render();
 }
 
 function render(): void {
@@ -671,8 +792,8 @@ function render(): void {
             <h2 class="mode-select-heading">ゲームモード</h2>
             <div class="mode-select-grid">
               <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn">training</button>
+              <button class="mode-option-btn ${selectedGameMode === 'timeAttack' ? 'is-selected' : ''}" id="mode-time-attack-btn">time attack（20問）</button>
               <button class="mode-option-btn is-disabled" id="mode-time-challenge-btn" disabled>time challenge（未実装）</button>
-              <button class="mode-option-btn is-disabled" id="mode-time-attack-btn" disabled>time attack（未実装）</button>
             </div>
           </section>
 
@@ -698,6 +819,12 @@ function render(): void {
     const trainingModeButton = document.querySelector<HTMLButtonElement>('#mode-training-btn');
     trainingModeButton?.addEventListener('click', () => {
       selectedGameMode = 'training';
+      modeSelectError = null;
+      render();
+    });
+    const timeAttackModeButton = document.querySelector<HTMLButtonElement>('#mode-time-attack-btn');
+    timeAttackModeButton?.addEventListener('click', () => {
+      selectedGameMode = 'timeAttack';
       modeSelectError = null;
       render();
     });
@@ -735,16 +862,68 @@ function render(): void {
     return;
   }
 
+  if (screen === 'timeAttackResult') {
+    root.innerHTML = `
+      <div class="center-card">
+        <div class="mode-select-screen">
+          <h1 class="mode-select-title">time attack 結果</h1>
+          <section class="mode-select-section">
+            <h2 class="mode-select-heading">タイム</h2>
+            <p class="time-attack-result-value">${formatTimeAttackMs(timeAttackResultTimeMs)}</p>
+          </section>
+          <section class="mode-select-section">
+            <h2 class="mode-select-heading">不正解数</h2>
+            <p class="time-attack-result-value">${timeAttackIncorrectCount}</p>
+          </section>
+          <div class="mode-select-actions">
+            <button class="start-btn" id="time-attack-retry-btn">もう一度プレイ</button>
+            <button class="next-btn" id="time-attack-title-btn">タイトルへ戻る</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const retryButton = document.querySelector<HTMLButtonElement>('#time-attack-retry-btn');
+    retryButton?.addEventListener('click', startGame);
+    const titleButton = document.querySelector<HTMLButtonElement>('#time-attack-title-btn');
+    titleButton?.addEventListener('click', () => {
+      screen = 'title';
+      state = 'ready';
+      resetTimeAttackState();
+      render();
+    });
+    return;
+  }
+
   const isPaused = state === 'paused';
   const isCountdown = state === 'countdown' && countdownState.isActive;
   const isEffectActive = answerEffect !== null;
   const isAnswerLocked = state === 'result' || isEffectActive || isPaused || isCountdown;
   const discardRows = chunkDiscards(currentQuestion?.discards ?? []);
   const countdownLabel = countdownState.labels[countdownState.currentIndex] ?? '';
+  const isTimeAttack = selectedGameMode === 'timeAttack';
+  const timeAttackDisplayBase = state === 'result' ? timeAttackAnsweredCount : timeAttackAnsweredCount + 1;
+  const timeAttackDisplayCount = Math.min(Math.max(timeAttackDisplayBase, 1), TIME_ATTACK_QUESTION_LIMIT);
+  const headerQuestionProgress = `${String(timeAttackDisplayCount).padStart(2, '0')}/${TIME_ATTACK_QUESTION_LIMIT}`;
+  const headerElapsedTime = formatTimeAttackMs(getTimeAttackTotalMs());
+  const showTimeAttackPenalty = Date.now() < timeAttackPenaltyNoticeUntil;
 
   root.innerHTML = `
     <div class="app">
       <header class="status-bar">
+        ${isTimeAttack ? `
+        <div class="status-item">
+          <span class="status-label">問題</span>
+          <span class="status-value">${headerQuestionProgress}</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">経過時間</span>
+          <span class="status-value time-attack-time-row">
+            <span id="time-attack-elapsed">${headerElapsedTime}</span>
+            <span class="time-attack-penalty ${showTimeAttackPenalty ? 'is-visible' : ''}" id="time-attack-penalty">+5秒</span>
+          </span>
+        </div>
+        ` : `
         <div class="status-item">
           <span class="status-label">正解数</span>
           <span class="status-value">${correctAnswerCount}</span>
@@ -757,6 +936,7 @@ function render(): void {
           <span class="status-label">正答率</span>
           <span class="status-value">${accuracy}</span>
         </div>
+        `}
         <button class="pause-btn" id="pause-btn" aria-label="一時停止" ${isPaused || isCountdown ? 'disabled' : ''}>
           <span class="pause-icon" aria-hidden="true">⏸</span>
         </button>
@@ -842,6 +1022,15 @@ function render(): void {
 
     totalAnswerCount += 1;
     const isCorrect = selectedAnswer === currentQuestion.correctCount;
+    if (selectedGameMode === 'timeAttack') {
+      if (isCorrect) {
+        timeAttackAnsweredCount += 1;
+      } else {
+        timeAttackIncorrectCount += 1;
+        timeAttackPenaltyMs += TIME_ATTACK_INCORRECT_PENALTY_MS;
+        timeAttackPenaltyNoticeUntil = Date.now() + 1200;
+      }
+    }
     state = 'result';
     answerEffect = isCorrect ? 'correct' : 'incorrect';
     playEffectAudio(answerEffect);
@@ -849,6 +1038,13 @@ function render(): void {
       correctAnswerCount += 1;
     }
     render();
+
+    if (selectedGameMode === 'timeAttack') {
+      startAnswerEffectTimer(isCorrect ? 1200 : 1000, () => {
+        goToNextQuestion();
+      });
+      return;
+    }
 
     if (isCorrect) {
       startAnswerEffectTimer(2000, () => {
@@ -896,8 +1092,8 @@ function render(): void {
 }
 
 function startGame(): void {
-  if (selectedGameMode !== 'training') {
-    modeSelectError = '選択したゲームモードは未実装です。training を選択してください。';
+  if (selectedGameMode === 'timeChallenge') {
+    modeSelectError = '選択したゲームモードは未実装です。training または time attack を選択してください。';
     screen = 'modeSelect';
     state = 'ready';
     render();
@@ -906,11 +1102,21 @@ function startGame(): void {
 
   stopAnswerEffectTimer();
   stopCountdown();
+  pauseTimeAttackClock();
+  stopTimeAttackTickTimer();
   answerEffect = null;
   isHowToModalOpen = false;
   modeSelectError = null;
   screen = 'training';
   questions = filterQuestionsByDifficulty(initialQuestions, selectedDifficulty);
+  if (selectedGameMode === 'timeAttack' && questions.length < TIME_ATTACK_QUESTION_LIMIT) {
+    modeSelectError = `選択した難易度の問題数が不足しています（${questions.length}/${TIME_ATTACK_QUESTION_LIMIT}問）。`;
+    screen = 'modeSelect';
+    state = 'ready';
+    render();
+    return;
+  }
+  resetTimeAttackState();
   currentQuestion = getRandomQuestion();
   selectedAnswer = null;
   totalAnswerCount = 0;
@@ -924,6 +1130,9 @@ function startGame(): void {
   }
   startCountdown(GAME_START_COUNTDOWN_LABELS, GAME_START_COUNTDOWN_STEP_MS, () => {
     state = 'playing';
+    if (selectedGameMode === 'timeAttack') {
+      startTimeAttackClock();
+    }
     render();
   });
 }
