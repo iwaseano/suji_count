@@ -44,6 +44,10 @@ type CountdownState = {
   stepMs: number;
   onComplete: (() => void) | null;
 };
+type AboutSujiPage = {
+  title: string;
+  paragraphs: string[];
+};
 
 const correctEffectAudio = new Audio(new URL('../mp3/correct_pinpon.mp3', import.meta.url).href);
 const incorrectEffectAudio = new Audio(new URL('../mp3/cancel_invalid.mp3', import.meta.url).href);
@@ -124,6 +128,8 @@ let audioSettings: AudioSettings = loadAudioSettings();
 let isLoadingQuestions = true;
 let questionLoadError: string | null = null;
 let isHowToModalOpen = false;
+let isAboutSujiModalOpen = false;
+let aboutSujiPageIndex = 0;
 let selectedGameMode: GameMode = 'training';
 let selectedDifficulty: Difficulty = 'expert';
 let modeSelectError: string | null = null;
@@ -176,6 +182,35 @@ const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
   advanced: '<strong>Advanced:</strong><br>捨牌に萬子/筒子/索子のうち<strong>二色まで</strong>が含まれる問題を出題します。',
   expert: '<strong>Expert:</strong><br>収録されている<strong>すべての問題</strong>から出題されます。',
 };
+const ABOUT_SUJI_PAGES: AboutSujiPage[] = [
+  {
+    title: '筋カウントとは？',
+    paragraphs: [
+      '筋（スジ）とは、相手の捨牌から両面待ちに当たらない牌を推測するための、麻雀の守備の基本技術です。',
+      '例えば、相手の河に「4萬」が捨てられている場合、両面待ちであれば「1萬」と「7萬」は当たりません。',
+      'このような牌同士の関係を「筋(スジ)」と呼びます。',
+      'スジは萬子・筒子・索子それぞれに6種類あり、合計で全18種類存在します。',
+      '捨牌に存在する牌のスジをカウントし18種類から消去することで、残った筋の危険度を簡易計算することができます。',
+    ],
+  },
+  {
+    title: 'なぜ筋カウントを練習するの？',
+    paragraphs: [
+      '相手からリーチを受けたとき、自分の手牌からどの牌を捨てるか判断することは、麻雀の守備において重要です。',
+      '相手の捨牌からスジの消化状況を素早く把握できれば、両面待ちの可能性が残っている牌を見極める助けになります。',
+      'このアプリでは、捨牌から残りスジの数を素早く数える練習を通じて、麻雀の守備判断に必要な基礎能力を鍛えます。',
+    ],
+  },
+  {
+    title: '残りスジと危険度',
+    paragraphs: [
+      'スジが多く消化されているほど、両面待ちの可能性が否定され、増えます。',
+      '一方で、残りスジが少ない状況では、まだ通っていない無スジの牌に注意が必要です。',
+      '残りスジが少ないからといって、すべての牌が安全になるわけではありません。',
+      'また、スジは両面待ちに対する判断材料であり、嵌張待ち・辺張待ち・単騎待ち・シャンポン待ちには通用しません。',
+    ],
+  },
+];
 
 function clampVolume(volume: number): number {
   return Math.min(100, Math.max(0, Math.round(volume)));
@@ -908,6 +943,11 @@ function render(): void {
   }
 
   if (screen === 'title') {
+    const currentAboutSujiPage = ABOUT_SUJI_PAGES[aboutSujiPageIndex] ?? ABOUT_SUJI_PAGES[0];
+    const prevAboutSujiPageIndex = (aboutSujiPageIndex - 1 + ABOUT_SUJI_PAGES.length) % ABOUT_SUJI_PAGES.length;
+    const nextAboutSujiPageIndex = (aboutSujiPageIndex + 1) % ABOUT_SUJI_PAGES.length;
+    const prevAboutSujiPageTitle = ABOUT_SUJI_PAGES[prevAboutSujiPageIndex]?.title ?? '';
+    const nextAboutSujiPageTitle = ABOUT_SUJI_PAGES[nextAboutSujiPageIndex]?.title ?? '';
     root.innerHTML = `
       <div class="center-card">
         <div class="start-screen">
@@ -917,9 +957,35 @@ function render(): void {
           <img class="title-logo-image" src="${titleLogoImage}" alt="麻雀筋トレ ロゴ" />
           <p class="subtitle">捨て牌から残っているスジ候補数を数えるMVPトレーニングです。</p>
           <button class="start-btn" id="start-btn" ${isLoadingQuestions || questionLoadError ? 'disabled' : ''}>トレーニング開始</button>
+          <button class="next-btn how-to-btn" id="about-suji-btn">筋カウントとは？</button>
           <button class="next-btn how-to-btn" id="how-to-btn">遊び方</button>
           ${isLoadingQuestions ? '<p class="status-note">問題データを読み込み中です...</p>' : ''}
           ${questionLoadError ? `<p class="error-note">${questionLoadError}</p><button class="next-btn" id="retry-load-btn">再読み込み</button>` : ''}
+          ${isAboutSujiModalOpen ? `
+            <div class="how-to-overlay" role="dialog" aria-modal="true" aria-labelledby="about-suji-page-title">
+              <div class="about-suji-modal">
+                <button class="how-to-close-btn" id="about-suji-close-btn" aria-label="筋カウントとはを閉じる">×</button>
+                <div class="about-suji-nav">
+                  <p class="about-suji-page-title" id="about-suji-page-title">${currentAboutSujiPage.title}</p>
+                  <div class="about-suji-nav-buttons">
+                    <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="about-suji-prev-btn">
+                      <span class="about-suji-nav-arrow">＜ Prev</span>
+                      <span class="about-suji-nav-page-name">${prevAboutSujiPageTitle}</span>
+                    </button>
+                    <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="about-suji-next-btn">
+                      <span class="about-suji-nav-arrow">Next ＞</span>
+                      <span class="about-suji-nav-page-name">${nextAboutSujiPageTitle}</span>
+                    </button>
+                  </div>
+                </div>
+                <p class="about-suji-page-index">${aboutSujiPageIndex + 1} / ${ABOUT_SUJI_PAGES.length}</p>
+                <div class="about-suji-content">
+                  ${currentAboutSujiPage.paragraphs.map((paragraph) => `<p class="about-suji-text">${paragraph}</p>`).join('')}
+                </div>
+                <button class="next-btn" id="about-suji-title-btn">タイトルに戻る</button>
+              </div>
+            </div>
+          ` : ''}
           ${isHowToModalOpen ? `
             <div class="how-to-overlay" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
               <div class="how-to-modal">
@@ -941,6 +1007,7 @@ function render(): void {
     const startButton = document.querySelector('#start-btn');
     startButton?.addEventListener('click', () => {
       isHowToModalOpen = false;
+      isAboutSujiModalOpen = false;
       modeSelectError = null;
       screen = 'modeSelect';
       render();
@@ -948,12 +1015,42 @@ function render(): void {
     const settingsOpenButton = document.querySelector<HTMLButtonElement>('#settings-open-btn');
     settingsOpenButton?.addEventListener('click', () => {
       isHowToModalOpen = false;
+      isAboutSujiModalOpen = false;
       screen = 'settings';
+      render();
+    });
+    const aboutSujiButton = document.querySelector<HTMLButtonElement>('#about-suji-btn');
+    aboutSujiButton?.addEventListener('click', () => {
+      isAboutSujiModalOpen = true;
+      isHowToModalOpen = false;
+      aboutSujiPageIndex = 0;
+      render();
+    });
+    const aboutSujiCloseButton = document.querySelector<HTMLButtonElement>('#about-suji-close-btn');
+    aboutSujiCloseButton?.addEventListener('click', () => {
+      isAboutSujiModalOpen = false;
+      render();
+    });
+    const aboutSujiPrevButton = document.querySelector<HTMLButtonElement>('#about-suji-prev-btn');
+    aboutSujiPrevButton?.addEventListener('click', () => {
+      aboutSujiPageIndex = (aboutSujiPageIndex - 1 + ABOUT_SUJI_PAGES.length) % ABOUT_SUJI_PAGES.length;
+      render();
+    });
+    const aboutSujiNextButton = document.querySelector<HTMLButtonElement>('#about-suji-next-btn');
+    aboutSujiNextButton?.addEventListener('click', () => {
+      aboutSujiPageIndex = (aboutSujiPageIndex + 1) % ABOUT_SUJI_PAGES.length;
+      render();
+    });
+    const aboutSujiTitleButton = document.querySelector<HTMLButtonElement>('#about-suji-title-btn');
+    aboutSujiTitleButton?.addEventListener('click', () => {
+      isAboutSujiModalOpen = false;
+      screen = 'title';
       render();
     });
     const howToButton = document.querySelector<HTMLButtonElement>('#how-to-btn');
     howToButton?.addEventListener('click', () => {
       isHowToModalOpen = true;
+      isAboutSujiModalOpen = false;
       render();
     });
     const howToCloseButton = document.querySelector<HTMLButtonElement>('#how-to-close-btn');
@@ -1408,6 +1505,7 @@ function startGame(): void {
   stopTimeChallengeTickTimer();
   answerEffect = null;
   isHowToModalOpen = false;
+  isAboutSujiModalOpen = false;
   modeSelectError = null;
   screen = 'training';
   questions = filterQuestionsByDifficulty(initialQuestions, selectedDifficulty);
