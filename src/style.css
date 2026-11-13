@@ -116,7 +116,7 @@ button {
 }
 
 .challenge-gauge {
-  width: 96px;
+  width: clamp(68px, 22vw, 96px);
   height: 8px;
   border-radius: 9999px;
   background: #e2e8f0;
@@ -132,7 +132,9 @@ button {
 
 .status-bar-time-challenge {
   display: grid;
-  grid-template-columns: 82px 172px minmax(96px, 1fr) auto;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr) minmax(0, 1fr) auto;
+  column-gap: 0.35rem;
+  padding-inline: 0.7rem;
   align-items: start;
 }
 
@@ -157,8 +159,8 @@ button {
 }
 
 .status-item-time-challenge-time {
-  --time-challenge-notice-width: 92px;
-  --time-challenge-time-width: 64px;
+  --time-challenge-notice-width: clamp(52px, 21vw, 92px);
+  --time-challenge-time-width: clamp(44px, 16vw, 64px);
 }
 
 .status-item-time-challenge-time .status-split-row {
@@ -200,6 +202,8 @@ button {
 .status-bar-time-challenge .pause-btn {
   margin-left: 0;
   justify-self: end;
+  width: 2.2rem;
+  height: 2.2rem;
 }
 
 .pause-btn {
