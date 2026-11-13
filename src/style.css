@@ -358,13 +358,15 @@ button {
 }
 
 .tile-stack {
+  --tile-width: min(54px, calc((100% - (0.5rem * 5)) / 6));
+  --tile-height: calc(var(--tile-width) * 78 / 54);
   position: relative;
   z-index: 1;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  width: calc((54px * 6) + (0.5rem * 5));
+  width: min(calc((54px * 6) + (0.5rem * 5)), 100%);
   max-width: 100%;
 }
 
@@ -376,8 +378,9 @@ button {
 }
 
 .tile {
-  width: 54px;
-  height: 78px;
+  width: var(--tile-width);
+  height: var(--tile-height);
+  flex: 0 0 var(--tile-width);
   border-radius: 12px;
   display: flex;
   align-items: center;
