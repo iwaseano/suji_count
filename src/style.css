@@ -33,7 +33,7 @@ button {
 }
 
 .app {
-  width: min(100%, 480px);
+  width: min(95vw, 480px);
   min-height: 100vh;
   background: #ffffff;
   box-shadow: 0 12px 40px rgba(17, 24, 39, 0.08);
@@ -489,13 +489,13 @@ button {
 }
 
 .center-card {
-  width: 100%;
-  max-width: 480px;
+  width: min(95vw, 480px);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  margin: 0 auto;
+  padding: 1rem 0;
 }
 
 .start-screen {
@@ -646,6 +646,10 @@ button {
   gap: 0.5rem;
 }
 
+.mode-select-grid-difficulty {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-option-btn {
   min-height: 48px;
   border: 1px solid #cbd5e1;
@@ -654,6 +658,12 @@ button {
   color: #0f172a;
   font-weight: 700;
   cursor: pointer;
+}
+
+.mode-option-btn-compact {
+  min-height: 40px;
+  padding: 0.3rem 0.35rem;
+  font-size: 0.92rem;
 }
 
 .mode-option-btn.is-selected {
@@ -671,6 +681,14 @@ button {
   margin: 0;
   color: #475569;
   font-size: 0.88rem;
+}
+
+.mode-select-description {
+  margin: 0;
+  min-height: 2.6rem;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .mode-select-actions {

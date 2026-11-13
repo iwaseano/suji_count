@@ -166,6 +166,16 @@ const TIME_ATTACK_TICK_INTERVAL_MS = 30;
 const TIME_CHALLENGE_INCORRECT_PENALTY_MS = TIME_CHALLENGE_INCORRECT_PENALTY_SECONDS * 1000;
 const TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS = TIME_CHALLENGE_QUESTION_GAUGE_MAX_SECONDS * 1000;
 const TIME_CHALLENGE_TICK_INTERVAL_MS = 30;
+const GAME_MODE_DESCRIPTIONS: Record<GameMode, string> = {
+  training: '正解・不正解を確認しながら、次へボタンで進む練習モードです。',
+  timeAttack: '20問正解するまでのタイムを競います。不正解時は +5秒 ペナルティです。',
+  timeChallenge: '制限時間内に正解数を伸ばします。不正解時は -5秒、正解時はボーナスがあります。',
+};
+const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
+  easy: '<strong>Easy:</strong><br>捨牌に萬子/筒子/索子のうち<strong>一色のみ</strong>が含まれる問題を出題します。',
+  advanced: '<strong>Advanced:</strong><br>捨牌に萬子/筒子/索子のうち<strong>二色まで</strong>が含まれる問題を出題します。',
+  expert: '<strong>Expert:</strong><br>収録されている<strong>すべての問題</strong>から出題されます。',
+};
 
 function clampVolume(volume: number): number {
   return Math.min(100, Math.max(0, Math.round(volume)));
@@ -967,19 +977,21 @@ function render(): void {
           <section class="mode-select-section">
             <h2 class="mode-select-heading">ゲームモード</h2>
             <div class="mode-select-grid">
-              <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn">training</button>
-              <button class="mode-option-btn ${selectedGameMode === 'timeAttack' ? 'is-selected' : ''}" id="mode-time-attack-btn">time attack（20問）</button>
-              <button class="mode-option-btn ${selectedGameMode === 'timeChallenge' ? 'is-selected' : ''}" id="mode-time-challenge-btn">time challenge</button>
+              <button class="mode-option-btn ${selectedGameMode === 'timeChallenge' ? 'is-selected' : ''}" id="mode-time-challenge-btn">チャレンジモード</button>
+              <button class="mode-option-btn ${selectedGameMode === 'timeAttack' ? 'is-selected' : ''}" id="mode-time-attack-btn">タイムアタックモード</button>
+              <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn">トレーニングモード</button>
             </div>
+            <p class="mode-select-description">${GAME_MODE_DESCRIPTIONS[selectedGameMode]}</p>
           </section>
 
           <section class="mode-select-section">
             <h2 class="mode-select-heading">難易度</h2>
-            <div class="mode-select-grid">
-              <button class="mode-option-btn ${selectedDifficulty === 'easy' ? 'is-selected' : ''}" id="difficulty-easy-btn">Easy</button>
-              <button class="mode-option-btn ${selectedDifficulty === 'advanced' ? 'is-selected' : ''}" id="difficulty-advanced-btn">advanced</button>
-              <button class="mode-option-btn ${selectedDifficulty === 'expert' ? 'is-selected' : ''}" id="difficulty-expert-btn">Expert</button>
+            <div class="mode-select-grid mode-select-grid-difficulty">
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'easy' ? 'is-selected' : ''}" id="difficulty-easy-btn">Easy</button>
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'advanced' ? 'is-selected' : ''}" id="difficulty-advanced-btn">advanced</button>
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'expert' ? 'is-selected' : ''}" id="difficulty-expert-btn">Expert</button>
             </div>
+            <p class="mode-select-description">${DIFFICULTY_DESCRIPTIONS[selectedDifficulty]}</p>
           </section>
 
           ${modeSelectError ? `<p class="error-note">${modeSelectError}</p>` : ''}
