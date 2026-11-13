@@ -58,6 +58,11 @@ button {
   min-width: 72px;
 }
 
+.status-item-wide {
+  min-width: 120px;
+  align-items: flex-start;
+}
+
 .status-label {
   font-size: 0.7rem;
   color: #6b7280;
@@ -66,6 +71,11 @@ button {
 .status-value {
   font-size: 1.15rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-value-compact {
+  font-size: 1rem;
 }
 
 .time-attack-time-row {
@@ -74,16 +84,122 @@ button {
   gap: 0.35rem;
 }
 
+#time-challenge-remaining {
+  display: inline-block;
+  width: 64px;
+}
+
 .time-attack-penalty {
   opacity: 0;
   color: #dc2626;
   font-size: 0.8rem;
   font-weight: 700;
+  min-width: 3.5ch;
   transition: opacity 0.12s ease;
 }
 
 .time-attack-penalty.is-visible {
   opacity: 1;
+}
+
+.time-attack-bonus {
+  opacity: 0;
+  color: #16a34a;
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-width: 5ch;
+  transition: opacity 0.12s ease;
+}
+
+.time-attack-bonus.is-visible {
+  opacity: 1;
+}
+
+.challenge-gauge {
+  width: 96px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.challenge-gauge-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #eab308 60%, #f97316 100%);
+  transition: width 0.08s linear;
+}
+
+.status-bar-time-challenge {
+  display: grid;
+  grid-template-columns: 82px 172px minmax(96px, 1fr) auto;
+  align-items: start;
+}
+
+.status-bar-time-challenge .status-item {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 0.9rem 1.3rem 1rem;
+  row-gap: 0.2rem;
+  align-items: start;
+  justify-items: start;
+}
+
+.status-bar-time-challenge .status-label {
+  line-height: 1;
+}
+
+.time-challenge-notice {
+  display: inline-flex;
+  justify-content: center;
+  width: var(--time-challenge-notice-width);
+  white-space: nowrap;
+}
+
+.status-item-time-challenge-time {
+  --time-challenge-notice-width: 92px;
+  --time-challenge-time-width: 64px;
+}
+
+.status-item-time-challenge-time .status-split-row {
+  display: grid;
+  grid-template-columns: var(--time-challenge-time-width) var(--time-challenge-notice-width);
+  align-items: center;
+  column-gap: 0.35rem;
+  width: 100%;
+  justify-content: end;
+}
+
+.status-item-time-challenge-time .status-split-row .status-label {
+  justify-self: start;
+}
+
+.status-item-time-challenge-time .status-split-row .time-challenge-notice {
+  border: none;
+}
+
+.status-bar-time-challenge .status-value {
+  line-height: 1.2;
+}
+
+.status-bar-time-challenge .status-item-wide .challenge-gauge {
+  align-self: center;
+}
+
+.status-item-time-challenge-time {
+  align-items: flex-start;
+}
+
+.status-note-slot {
+  display: block;
+  width: 100%;
+  min-height: 1rem;
+  visibility: hidden;
+}
+
+.status-bar-time-challenge .pause-btn {
+  margin-left: 0;
+  justify-self: end;
 }
 
 .pause-btn {
