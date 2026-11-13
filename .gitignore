@@ -1,6 +1,6 @@
 node_modules/
 dist/
 assets/*
-!assets/logo_image.png
+!assets/logo_image.*
 .vite/
 npm-debug.log*
