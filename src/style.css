@@ -116,7 +116,7 @@ button {
 }
 
 .challenge-gauge {
-  width: 96px;
+  width: clamp(68px, 22vw, 96px);
   height: 8px;
   border-radius: 9999px;
   background: #e2e8f0;
@@ -132,7 +132,9 @@ button {
 
 .status-bar-time-challenge {
   display: grid;
-  grid-template-columns: 82px 172px minmax(96px, 1fr) auto;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr) minmax(0, 1fr) auto;
+  column-gap: 0.35rem;
+  padding-inline: 0.7rem;
   align-items: start;
 }
 
@@ -157,8 +159,8 @@ button {
 }
 
 .status-item-time-challenge-time {
-  --time-challenge-notice-width: 92px;
-  --time-challenge-time-width: 64px;
+  --time-challenge-notice-width: clamp(52px, 21vw, 92px);
+  --time-challenge-time-width: clamp(44px, 16vw, 64px);
 }
 
 .status-item-time-challenge-time .status-split-row {
@@ -200,6 +202,8 @@ button {
 .status-bar-time-challenge .pause-btn {
   margin-left: 0;
   justify-self: end;
+  width: 2.2rem;
+  height: 2.2rem;
 }
 
 .pause-btn {
@@ -358,13 +362,15 @@ button {
 }
 
 .tile-stack {
+  --tile-width: min(54px, calc((100% - (0.5rem * 5)) / 6));
+  --tile-height: calc(var(--tile-width) * 78 / 54);
   position: relative;
   z-index: 1;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  width: calc((54px * 6) + (0.5rem * 5));
+  width: min(calc((54px * 6) + (0.5rem * 5)), 100%);
   max-width: 100%;
 }
 
@@ -376,8 +382,9 @@ button {
 }
 
 .tile {
-  width: 54px;
-  height: 78px;
+  width: var(--tile-width);
+  height: var(--tile-height);
+  flex: 0 0 var(--tile-width);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -541,6 +548,107 @@ button {
   padding: 1.2rem 1rem 1rem;
 }
 
+.about-suji-modal {
+  position: relative;
+  width: 90vw;
+  height: 90vh;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(17, 24, 39, 0.18);
+  padding: 1rem;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.about-suji-nav {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 0.5rem;
+  align-items: start;
+  padding-right: 2.2rem;
+}
+
+.about-suji-nav-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.about-suji-nav-btn {
+  width: 100%;
+  height: 3.7rem;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: left;
+  padding: 0.3rem 0.45rem;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  overflow: hidden;
+}
+
+#about-suji-prev-btn {
+  justify-self: start;
+  justify-items: start;
+}
+
+#about-suji-next-btn {
+  justify-self: end;
+  justify-items: end;
+  text-align: right;
+}
+
+.about-suji-nav-arrow {
+  font-weight: 700;
+}
+
+.about-suji-nav-page-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25;
+  min-height: calc(1.25em * 2);
+  color: #334155;
+}
+
+.about-suji-page-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  min-height: calc(1.25em * 2);
+  color: #0f172a;
+  text-align: center;
+}
+
+.about-suji-page-index {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.about-suji-content {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.9rem;
+  overflow-y: auto;
+}
+
+.about-suji-text {
+  margin: 0 0 0.7rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.about-suji-text:last-child {
+  margin-bottom: 0;
+}
+
 .how-to-close-btn {
   position: absolute;
   top: 0.55rem;
@@ -663,7 +771,7 @@ button {
 .mode-option-btn-compact {
   min-height: 40px;
   padding: 0.3rem 0.35rem;
-  font-size: 0.92rem;
+  font-size: 0.72rem;
 }
 
 .mode-option-btn.is-selected {
