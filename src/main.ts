@@ -1,5 +1,5 @@
 import './style.css';
-import { getTileSvgPath } from './tileMap';
+import { getTileName, getTileSvgPath } from './tileMap';
 import {
   TIME_CHALLENGE_FAST_BONUS_SECONDS,
   TIME_CHALLENGE_FAST_BONUS_THRESHOLD_SECONDS,
@@ -47,6 +47,11 @@ type CountdownState = {
 type AboutSujiPage = {
   title: string;
   paragraphs: string[];
+};
+type HowToPage = AboutSujiPage & {
+  image: string;
+  imageAlt: string;
+  imageFirst?: boolean;
 };
 
 const correctEffectAudio = new Audio(new URL('../mp3/correct_pinpon.mp3', import.meta.url).href);
@@ -110,6 +115,7 @@ const root = app;
 
 let state: GameState = 'ready';
 let screen: Screen = 'title';
+let renderedScreen: Screen = screen;
 let initialQuestions: Question[] = [];
 let questions: Question[] = [];
 let currentQuestion: Question | null = null;
@@ -130,6 +136,7 @@ let questionLoadError: string | null = null;
 let isHowToModalOpen = false;
 let isAboutSujiModalOpen = false;
 let aboutSujiPageIndex = 0;
+let howToPageIndex = 0;
 let selectedGameMode: GameMode = 'training';
 let selectedDifficulty: Difficulty = 'expert';
 let modeSelectError: string | null = null;
@@ -143,6 +150,7 @@ let timeAttackResultTimeMs = 0;
 let timeAttackPenaltyNoticeUntil = 0;
 let timeChallengeRemainingMs = TIME_CHALLENGE_INITIAL_TIME_SECONDS * 1000;
 let timeChallengeQuestionStartedAt: number | null = null;
+let timeChallengeQuestionElapsedMs = 0;
 let timeChallengeTickTimerId: number | null = null;
 let timeChallengeNoticeReason = '';
 let timeChallengeNoticeAmount = '';
@@ -173,14 +181,14 @@ const TIME_CHALLENGE_INCORRECT_PENALTY_MS = TIME_CHALLENGE_INCORRECT_PENALTY_SEC
 const TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS = TIME_CHALLENGE_QUESTION_GAUGE_MAX_SECONDS * 1000;
 const TIME_CHALLENGE_TICK_INTERVAL_MS = 30;
 const GAME_MODE_DESCRIPTIONS: Record<GameMode, string> = {
-  training: '正解・不正解を確認しながら、次へボタンで進む練習モードです。',
+  training: '正解後は自動で次の問題へ。不正解時は再回答できます。',
   timeAttack: '20問正解するまでのタイムを競います。不正解時は +5秒 ペナルティです。',
   timeChallenge: '制限時間内に正解数を伸ばします。不正解時は -5秒、正解時はボーナスがあります。',
 };
 const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
-  easy: '<strong>Easy:</strong><br>捨牌に萬子/筒子/索子のうち<strong>一色のみ</strong>が含まれる問題を出題します。',
-  advanced: '<strong>Advanced:</strong><br>捨牌に萬子/筒子/索子のうち<strong>二色まで</strong>が含まれる問題を出題します。',
-  expert: '<strong>Expert:</strong><br>収録されている<strong>すべての問題</strong>から出題されます。',
+  easy: '数牌は1色のみ。字牌を含むこともあります。',
+  advanced: '数牌は2色まで。字牌を含むこともあります。',
+  expert: '収録されているすべての問題を出題します。',
 };
 const ABOUT_SUJI_PAGES: AboutSujiPage[] = [
   {
@@ -204,11 +212,83 @@ const ABOUT_SUJI_PAGES: AboutSujiPage[] = [
   {
     title: '残りスジと危険度',
     paragraphs: [
-      'スジが多く消化されているほど、両面待ちの可能性が否定され、増えます。',
+      'スジが多く消化されているほど、両面待ちに当たらないと判断できる牌が増えます。',
       '一方で、残りスジが少ない状況では、まだ通っていない無スジの牌に注意が必要です。',
       '残りスジが少ないからといって、すべての牌が安全になるわけではありません。',
       'また、スジは両面待ちに対する判断材料であり、嵌張待ち・辺張待ち・単騎待ち・シャンポン待ちには通用しません。',
     ],
+  },
+];
+const HOW_TO_PAGES: HowToPage[] = [
+  {
+    title: 'モードを選ぶ',
+    paragraphs: [
+      'ゲームモードと難易度を選び、「ゲーム開始」を押します。',
+    ],
+    image: 'mode-selection.png',
+    imageAlt: 'トレーニングモードとEasyを選択したモード・難易度選択画面',
+  },
+  {
+    title: '捨牌を見る',
+    paragraphs: [
+      '捨牌を見て、残っているスジ候補数を数えます。',
+    ],
+    image: 'discards.png',
+    imageAlt: '緑の卓に東、北、發、七筒が捨てられている例',
+  },
+  {
+    title: '回答する',
+    paragraphs: [
+      '残りスジの数を数字ボタンで選び、「回答を確定」を押します。数字欄の「確定」でも回答できます。',
+      '画像では0を選んでいます。',
+      'トレーニングモードでは「次の問題へ」でも進めます。',
+    ],
+    image: 'answer.png',
+    imageAlt: '数字の0を選択した回答欄。「確定」「回答を確定」「次の問題へ」ボタンがある',
+  },
+  {
+    title: '正誤を確認',
+    paragraphs: [
+      '正解は○、不正解は×で表示されます。画像は不正解の例です。',
+      'トレーニングモードは、正解後に自動で次へ進み、不正解後は再回答できます。',
+      'タイムアタック・チャレンジモードは、正誤表示後に次へ進みます。',
+    ],
+    image: 'feedback.png',
+    imageAlt: '東、北、發、七筒の捨牌の上に不正解を示す×が表示された画面',
+  },
+  {
+    title: 'トレーニングモード',
+    paragraphs: [
+      '時間を気にせず練習できます。正解すると次の問題へ進み、不正解の場合は同じ問題に再回答できます。',
+      'ヘッダーには正解数、回答数、正答率が表示されます。回答数には不正解も含まれます。',
+      '「次の問題へ」で問題を進めることもできます。右上のボタンで一時停止できます。',
+    ],
+    image: 'training-header.png',
+    imageAlt: 'トレーニングモードのヘッダー。正解数0、回答数0、正答率未表示と一時停止ボタン',
+    imageFirst: true,
+  },
+  {
+    title: 'タイムアタックモード',
+    paragraphs: [
+      `${TIME_ATTACK_QUESTION_LIMIT}問正解を目指し、かかったタイムを競います。正誤にかかわらず次の問題へ進みます。`,
+      `不正解ごとに経過時間へ${TIME_ATTACK_INCORRECT_PENALTY_MS / 1000}秒が加算されます。`,
+      'ヘッダーの「問題」は正解数に応じた進行状況、「経過時間」はペナルティを含むタイムです。右上のボタンで一時停止できます。',
+    ],
+    image: 'time-attack-header.png',
+    imageAlt: 'タイムアタックモードのヘッダー。問題01/20、経過時間と一時停止ボタン',
+    imageFirst: true,
+  },
+  {
+    title: 'チャレンジモード',
+    paragraphs: [
+      `最初の持ち時間は${TIME_CHALLENGE_INITIAL_TIME_SECONDS}秒です。残り時間内に正解数を伸ばしましょう。不正解で残り時間が${TIME_CHALLENGE_INCORRECT_PENALTY_SECONDS}秒減り、正誤にかかわらず次の問題へ進みます。`,
+      `出題から${TIME_CHALLENGE_FAST_BONUS_THRESHOLD_SECONDS}秒以内の正解で${TIME_CHALLENGE_FAST_BONUS_SECONDS}秒、それを超えて${TIME_CHALLENGE_MID_BONUS_THRESHOLD_SECONDS}秒以内の正解で${TIME_CHALLENGE_MID_BONUS_SECONDS}秒が加算されます。`,
+      `正解数が${TIME_CHALLENGE_STREAK_STEP}問増えるごとにもボーナスがあり、${TIME_CHALLENGE_STREAK_STEP}問で${TIME_CHALLENGE_STREAK_BONUS_MULTIPLIER_SECONDS}秒、${TIME_CHALLENGE_STREAK_STEP * 2}問で${TIME_CHALLENGE_STREAK_BONUS_MULTIPLIER_SECONDS * 2}秒と増えます。`,
+      'ヘッダーには正解数と残り時間、速度ボーナスの対象時間を示すゲージがあります。ゲージがなくなっても回答できます。右上のボタンで一時停止できます。',
+    ],
+    image: 'challenge-header.png',
+    imageAlt: 'チャレンジモードのヘッダー。正解数、残り時間、正解ボーナス残りのゲージと一時停止ボタン',
+    imageFirst: true,
   },
 ];
 
@@ -581,7 +661,8 @@ function goToNextQuestion(): void {
   selectedAnswer = null;
   state = 'playing';
   if (selectedGameMode === 'timeChallenge') {
-    timeChallengeQuestionStartedAt = Date.now();
+    timeChallengeQuestionElapsedMs = 0;
+    startTimeChallengeQuestionTimer();
   }
   render();
 }
@@ -632,6 +713,7 @@ function resetTimeAttackState(): void {
 function resetTimeChallengeState(): void {
   timeChallengeRemainingMs = TIME_CHALLENGE_INITIAL_TIME_SECONDS * 1000;
   timeChallengeQuestionStartedAt = null;
+  timeChallengeQuestionElapsedMs = 0;
   timeChallengeNoticeReason = '';
   timeChallengeNoticeAmount = '';
   timeChallengeNoticeVariant = null;
@@ -703,6 +785,7 @@ function pauseTimeChallengeClock(): void {
   }
   const elapsed = Date.now() - timeChallengeQuestionStartedAt;
   timeChallengeRemainingMs = Math.max(0, timeChallengeRemainingMs - elapsed);
+  timeChallengeQuestionElapsedMs += elapsed;
   timeChallengeQuestionStartedAt = null;
 }
 
@@ -729,10 +812,15 @@ function updateTimeAttackElapsedDisplay(): void {
 }
 
 function getTimeChallengeQuestionElapsedMs(): number {
-  if (timeChallengeQuestionStartedAt === null) {
-    return 0;
-  }
-  return Date.now() - timeChallengeQuestionStartedAt;
+  const runningElapsed = timeChallengeQuestionStartedAt === null ? 0 : Date.now() - timeChallengeQuestionStartedAt;
+  return timeChallengeQuestionElapsedMs + runningElapsed;
+}
+
+function getTimeChallengeGaugeRemainingMs(): number {
+  return Math.min(
+    TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS,
+    Math.max(0, TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS - getTimeChallengeQuestionElapsedMs()),
+  );
 }
 
 function updateTimeChallengeDisplay(): void {
@@ -745,10 +833,15 @@ function updateTimeChallengeDisplay(): void {
     remainingElement.textContent = formatTimeChallengeRemainingMs(remainingMs);
   }
   const gaugeFill = document.querySelector<HTMLElement>('#time-challenge-gauge-fill');
-  if (gaugeFill) {
-    const elapsedMs = getTimeChallengeQuestionElapsedMs();
-    const ratio = Math.max(0, 1 - (elapsedMs / TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS));
-    gaugeFill.style.width = `${Math.round(ratio * 100)}%`;
+  const gauge = document.querySelector<HTMLElement>('#time-challenge-gauge');
+  if (gaugeFill && gauge) {
+    const gaugeRemainingMs = getTimeChallengeGaugeRemainingMs();
+    gaugeFill.style.width = `${Math.round((gaugeRemainingMs / TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS) * 100)}%`;
+    const remainingSeconds = Math.ceil(gaugeRemainingMs / 1000);
+    if (gauge.getAttribute('aria-valuenow') !== String(remainingSeconds)) {
+      gauge.setAttribute('aria-valuenow', String(remainingSeconds));
+      gauge.setAttribute('aria-valuetext', `残り${remainingSeconds}秒`);
+    }
   }
   updateTimeChallengeNoticeDisplay();
 
@@ -850,6 +943,11 @@ function finishTimeChallenge(): void {
 }
 
 function render(): void {
+  if (screen !== renderedScreen) {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    renderedScreen = screen;
+  }
+
   const accuracy = totalAnswerCount === 0 ? '---' : `${((correctAnswerCount / totalAnswerCount) * 100).toFixed(1)}%`;
 
   if (screen === 'settings') {
@@ -862,7 +960,7 @@ function render(): void {
           <div class="audio-setting-card">
             <h2 class="audio-setting-title">BGM</h2>
             <div class="audio-control-row">
-              <button class="mute-btn ${audioSettings.bgmMuted ? 'is-muted' : ''}" id="bgm-mute-btn" aria-label="BGMのミュート切り替え">
+              <button class="mute-btn ${audioSettings.bgmMuted ? 'is-muted' : ''}" id="bgm-mute-btn" aria-label="BGMのミュート切り替え" aria-pressed="${audioSettings.bgmMuted}">
                 ${audioSettings.bgmMuted ? '🔇' : '🔊'}
               </button>
               <input
@@ -875,14 +973,14 @@ function render(): void {
                 value="${audioSettings.bgmVolume}"
                 aria-label="BGM音量"
               />
-              <span class="volume-value">${audioSettings.bgmVolume}%</span>
+              <span class="volume-value" id="bgm-volume-value">${audioSettings.bgmVolume}%</span>
             </div>
           </div>
 
           <div class="audio-setting-card">
             <h2 class="audio-setting-title">効果音</h2>
             <div class="audio-control-row">
-              <button class="mute-btn ${audioSettings.effectMuted ? 'is-muted' : ''}" id="effect-mute-btn" aria-label="効果音のミュート切り替え">
+              <button class="mute-btn ${audioSettings.effectMuted ? 'is-muted' : ''}" id="effect-mute-btn" aria-label="効果音のミュート切り替え" aria-pressed="${audioSettings.effectMuted}">
                 ${audioSettings.effectMuted ? '🔇' : '🔊'}
               </button>
               <input
@@ -895,11 +993,11 @@ function render(): void {
                 value="${audioSettings.effectVolume}"
                 aria-label="効果音音量"
               />
-              <span class="volume-value">${audioSettings.effectVolume}%</span>
+              <span class="volume-value" id="effect-volume-value">${audioSettings.effectVolume}%</span>
             </div>
           </div>
 
-          <button class="next-btn" id="settings-back-btn">タイトルへ戻る</button>
+          <button class="next-btn" id="settings-back-btn">タイトルに戻る</button>
         </div>
       </div>
     `;
@@ -920,18 +1018,24 @@ function render(): void {
     });
 
     const bgmVolumeSlider = document.querySelector<HTMLInputElement>('#bgm-volume-slider');
-    bgmVolumeSlider?.addEventListener('input', () => {
+    const bgmVolumeValue = document.querySelector<HTMLElement>('#bgm-volume-value');
+    const effectVolumeSlider = document.querySelector<HTMLInputElement>('#effect-volume-slider');
+    const effectVolumeValue = document.querySelector<HTMLElement>('#effect-volume-value');
+    if (!bgmVolumeSlider || !bgmVolumeValue || !effectVolumeSlider || !effectVolumeValue) {
+      throw new Error('Audio volume controls not found');
+    }
+
+    bgmVolumeSlider.addEventListener('input', () => {
       audioSettings = { ...audioSettings, bgmVolume: clampVolume(Number(bgmVolumeSlider.value)) };
       saveAudioSettings();
-      render();
+      bgmVolumeValue.textContent = `${audioSettings.bgmVolume}%`;
     });
 
-    const effectVolumeSlider = document.querySelector<HTMLInputElement>('#effect-volume-slider');
-    effectVolumeSlider?.addEventListener('input', () => {
+    effectVolumeSlider.addEventListener('input', () => {
       audioSettings = { ...audioSettings, effectVolume: clampVolume(Number(effectVolumeSlider.value)) };
       saveAudioSettings();
       applyEffectAudioSettings();
-      render();
+      effectVolumeValue.textContent = `${audioSettings.effectVolume}%`;
     });
 
     const backButton = document.querySelector<HTMLButtonElement>('#settings-back-btn');
@@ -943,11 +1047,33 @@ function render(): void {
   }
 
   if (screen === 'title') {
+    const previousDialog = root.querySelector<HTMLDialogElement>('dialog[open]');
+    const activeElement = document.activeElement;
+    const previousFocusId = activeElement instanceof HTMLElement && previousDialog?.contains(activeElement)
+      ? activeElement.id
+      : '';
     const currentAboutSujiPage = ABOUT_SUJI_PAGES[aboutSujiPageIndex] ?? ABOUT_SUJI_PAGES[0];
     const prevAboutSujiPageIndex = (aboutSujiPageIndex - 1 + ABOUT_SUJI_PAGES.length) % ABOUT_SUJI_PAGES.length;
     const nextAboutSujiPageIndex = (aboutSujiPageIndex + 1) % ABOUT_SUJI_PAGES.length;
     const prevAboutSujiPageTitle = ABOUT_SUJI_PAGES[prevAboutSujiPageIndex]?.title ?? '';
     const nextAboutSujiPageTitle = ABOUT_SUJI_PAGES[nextAboutSujiPageIndex]?.title ?? '';
+    const currentHowToPage = HOW_TO_PAGES[howToPageIndex] ?? HOW_TO_PAGES[0];
+    const prevHowToPageIndex = (howToPageIndex - 1 + HOW_TO_PAGES.length) % HOW_TO_PAGES.length;
+    const nextHowToPageIndex = (howToPageIndex + 1) % HOW_TO_PAGES.length;
+    const prevHowToPageTitle = HOW_TO_PAGES[prevHowToPageIndex]?.title ?? '';
+    const nextHowToPageTitle = HOW_TO_PAGES[nextHowToPageIndex]?.title ?? '';
+    const howToImage = `
+      <figure class="how-to-figure">
+        <figcaption class="how-to-caption">画面の例</figcaption>
+        <div class="how-to-image-frame">
+          <img class="how-to-image" src="${import.meta.env.BASE_URL}how-to/${currentHowToPage.image}" alt="${currentHowToPage.imageAlt}" />
+          ${currentHowToPage.image === 'answer.png' ? `
+            <span class="how-to-highlight how-to-highlight-answer" aria-hidden="true"></span>
+            <span class="how-to-highlight how-to-highlight-confirm" aria-hidden="true"></span>
+          ` : ''}
+        </div>
+      </figure>
+    `;
     root.innerHTML = `
       <div class="center-card title-center-card">
         <div class="start-screen start-screen-full">
@@ -962,19 +1088,22 @@ function render(): void {
           ${isLoadingQuestions ? '<p class="status-note">問題データを読み込み中です...</p>' : ''}
           ${questionLoadError ? `<p class="error-note">${questionLoadError}</p><button class="next-btn" id="retry-load-btn">再読み込み</button>` : ''}
           ${isAboutSujiModalOpen ? `
-            <div class="how-to-overlay" role="dialog" aria-modal="true" aria-labelledby="about-suji-page-title">
+            <dialog class="how-to-overlay about-suji-overlay" aria-labelledby="about-suji-page-title">
               <div class="about-suji-modal">
                 <button class="how-to-close-btn" id="about-suji-close-btn" aria-label="筋カウントとはを閉じる">×</button>
                 <div class="about-suji-nav">
                   <p class="about-suji-page-title" id="about-suji-page-title">${currentAboutSujiPage.title}</p>
+                  ${ABOUT_SUJI_PAGES.map((page) => `<p class="about-suji-page-title about-suji-nav-sizer" aria-hidden="true">${page.title}</p>`).join('')}
                   <div class="about-suji-nav-buttons">
                     <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="about-suji-prev-btn">
                       <span class="about-suji-nav-arrow">＜ Prev</span>
                       <span class="about-suji-nav-page-name">${prevAboutSujiPageTitle}</span>
+                      ${ABOUT_SUJI_PAGES.map((page) => `<span class="about-suji-nav-page-name about-suji-nav-sizer" aria-hidden="true">${page.title}</span>`).join('')}
                     </button>
                     <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="about-suji-next-btn">
                       <span class="about-suji-nav-arrow">Next ＞</span>
                       <span class="about-suji-nav-page-name">${nextAboutSujiPageTitle}</span>
+                      ${ABOUT_SUJI_PAGES.map((page) => `<span class="about-suji-nav-page-name about-suji-nav-sizer" aria-hidden="true">${page.title}</span>`).join('')}
                     </button>
                   </div>
                 </div>
@@ -984,21 +1113,37 @@ function render(): void {
                 </div>
                 <button class="next-btn" id="about-suji-title-btn">タイトルに戻る</button>
               </div>
-            </div>
+            </dialog>
           ` : ''}
           ${isHowToModalOpen ? `
-            <div class="how-to-overlay" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
-              <div class="how-to-modal">
+            <dialog class="how-to-overlay about-suji-overlay" aria-labelledby="how-to-page-title">
+              <div class="about-suji-modal">
                 <button class="how-to-close-btn" id="how-to-close-btn" aria-label="遊び方を閉じる">×</button>
-                <h2 class="how-to-title" id="how-to-title">遊び方</h2>
-                <p class="how-to-text">ここに遊び方の説明文を記載します。</p>
-                <ul class="how-to-list">
-                  <li>捨て牌を見て、残っているスジ候補数を数えます。</li>
-                  <li>下の数字ボタンから回答を選んで確定します。</li>
-                  <li>正解・不正解の表示後、次の問題へ進みます。</li>
-                </ul>
+                <div class="about-suji-nav">
+                  <p class="about-suji-page-title" id="how-to-page-title">${currentHowToPage.title}</p>
+                  ${HOW_TO_PAGES.map((page) => `<p class="about-suji-page-title about-suji-nav-sizer" aria-hidden="true">${page.title}</p>`).join('')}
+                  <div class="about-suji-nav-buttons">
+                    <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="how-to-prev-btn">
+                      <span class="about-suji-nav-arrow">＜ Prev</span>
+                      <span class="about-suji-nav-page-name">${prevHowToPageTitle}</span>
+                      ${HOW_TO_PAGES.map((page) => `<span class="about-suji-nav-page-name about-suji-nav-sizer" aria-hidden="true">${page.title}</span>`).join('')}
+                    </button>
+                    <button class="mode-option-btn mode-option-btn-compact about-suji-nav-btn" id="how-to-next-btn">
+                      <span class="about-suji-nav-arrow">Next ＞</span>
+                      <span class="about-suji-nav-page-name">${nextHowToPageTitle}</span>
+                      ${HOW_TO_PAGES.map((page) => `<span class="about-suji-nav-page-name about-suji-nav-sizer" aria-hidden="true">${page.title}</span>`).join('')}
+                    </button>
+                  </div>
+                </div>
+                <p class="about-suji-page-index" aria-label="${currentHowToPage.title}、${howToPageIndex + 1}ページ目、全${HOW_TO_PAGES.length}ページ">${howToPageIndex + 1} / ${HOW_TO_PAGES.length}</p>
+                <div class="about-suji-content">
+                  ${currentHowToPage.imageFirst ? howToImage : ''}
+                  ${currentHowToPage.paragraphs.map((paragraph) => `<p class="about-suji-text">${paragraph}</p>`).join('')}
+                  ${currentHowToPage.imageFirst ? '' : howToImage}
+                </div>
+                <button class="next-btn" id="how-to-title-btn">タイトルに戻る</button>
               </div>
-            </div>
+            </dialog>
           ` : ''}
         </div>
       </div>
@@ -1026,11 +1171,15 @@ function render(): void {
       aboutSujiPageIndex = 0;
       render();
     });
-    const aboutSujiCloseButton = document.querySelector<HTMLButtonElement>('#about-suji-close-btn');
-    aboutSujiCloseButton?.addEventListener('click', () => {
+    const closeTitleModal = (): void => {
+      const openerId = isAboutSujiModalOpen ? 'about-suji-btn' : 'how-to-btn';
       isAboutSujiModalOpen = false;
+      isHowToModalOpen = false;
       render();
-    });
+      document.getElementById(openerId)?.focus({ preventScroll: true });
+    };
+    const aboutSujiCloseButton = document.querySelector<HTMLButtonElement>('#about-suji-close-btn');
+    aboutSujiCloseButton?.addEventListener('click', closeTitleModal);
     const aboutSujiPrevButton = document.querySelector<HTMLButtonElement>('#about-suji-prev-btn');
     aboutSujiPrevButton?.addEventListener('click', () => {
       aboutSujiPageIndex = (aboutSujiPageIndex - 1 + ABOUT_SUJI_PAGES.length) % ABOUT_SUJI_PAGES.length;
@@ -1042,41 +1191,65 @@ function render(): void {
       render();
     });
     const aboutSujiTitleButton = document.querySelector<HTMLButtonElement>('#about-suji-title-btn');
-    aboutSujiTitleButton?.addEventListener('click', () => {
-      isAboutSujiModalOpen = false;
-      screen = 'title';
-      render();
-    });
+    aboutSujiTitleButton?.addEventListener('click', closeTitleModal);
     const howToButton = document.querySelector<HTMLButtonElement>('#how-to-btn');
     howToButton?.addEventListener('click', () => {
       isHowToModalOpen = true;
       isAboutSujiModalOpen = false;
+      howToPageIndex = 0;
       render();
     });
     const howToCloseButton = document.querySelector<HTMLButtonElement>('#how-to-close-btn');
-    howToCloseButton?.addEventListener('click', () => {
-      isHowToModalOpen = false;
+    howToCloseButton?.addEventListener('click', closeTitleModal);
+    const howToPrevButton = document.querySelector<HTMLButtonElement>('#how-to-prev-btn');
+    howToPrevButton?.addEventListener('click', () => {
+      howToPageIndex = (howToPageIndex - 1 + HOW_TO_PAGES.length) % HOW_TO_PAGES.length;
       render();
     });
+    const howToNextButton = document.querySelector<HTMLButtonElement>('#how-to-next-btn');
+    howToNextButton?.addEventListener('click', () => {
+      howToPageIndex = (howToPageIndex + 1) % HOW_TO_PAGES.length;
+      render();
+    });
+    const howToTitleButton = document.querySelector<HTMLButtonElement>('#how-to-title-btn');
+    howToTitleButton?.addEventListener('click', closeTitleModal);
     const retryLoadButton = document.querySelector<HTMLButtonElement>('#retry-load-btn');
     retryLoadButton?.addEventListener('click', () => {
       void initializeQuestions();
     });
+    const dialog = root.querySelector<HTMLDialogElement>('dialog');
+    if (dialog) {
+      dialog.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeTitleModal();
+        }
+      });
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeTitleModal();
+      });
+      dialog.showModal();
+      const previousFocus = document.getElementById(previousFocusId);
+      if (previousFocus && dialog.contains(previousFocus)) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    }
     return;
   }
 
   if (screen === 'modeSelect') {
     root.innerHTML = `
-      <div class="center-card">
-        <div class="mode-select-screen">
+      <div class="center-card mode-selection-card">
+        <div class="mode-select-screen mode-selection-screen">
           <h1 class="mode-select-title">モード・難易度選択</h1>
 
           <section class="mode-select-section">
             <h2 class="mode-select-heading">ゲームモード</h2>
             <div class="mode-select-grid">
-              <button class="mode-option-btn ${selectedGameMode === 'timeChallenge' ? 'is-selected' : ''}" id="mode-time-challenge-btn">チャレンジモード</button>
-              <button class="mode-option-btn ${selectedGameMode === 'timeAttack' ? 'is-selected' : ''}" id="mode-time-attack-btn">タイムアタックモード</button>
-              <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn">トレーニングモード</button>
+              <button class="mode-option-btn ${selectedGameMode === 'timeChallenge' ? 'is-selected' : ''}" id="mode-time-challenge-btn" aria-pressed="${selectedGameMode === 'timeChallenge'}">チャレンジモード</button>
+              <button class="mode-option-btn ${selectedGameMode === 'timeAttack' ? 'is-selected' : ''}" id="mode-time-attack-btn" aria-pressed="${selectedGameMode === 'timeAttack'}">タイムアタックモード</button>
+              <button class="mode-option-btn ${selectedGameMode === 'training' ? 'is-selected' : ''}" id="mode-training-btn" aria-pressed="${selectedGameMode === 'training'}">トレーニングモード</button>
             </div>
             <p class="mode-select-description">${GAME_MODE_DESCRIPTIONS[selectedGameMode]}</p>
           </section>
@@ -1084,9 +1257,9 @@ function render(): void {
           <section class="mode-select-section">
             <h2 class="mode-select-heading">難易度</h2>
             <div class="mode-select-grid mode-select-grid-difficulty">
-              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'easy' ? 'is-selected' : ''}" id="difficulty-easy-btn">Easy</button>
-              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'advanced' ? 'is-selected' : ''}" id="difficulty-advanced-btn">advanced</button>
-              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'expert' ? 'is-selected' : ''}" id="difficulty-expert-btn">Expert</button>
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'easy' ? 'is-selected' : ''}" id="difficulty-easy-btn" aria-pressed="${selectedDifficulty === 'easy'}">Easy</button>
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'advanced' ? 'is-selected' : ''}" id="difficulty-advanced-btn" aria-pressed="${selectedDifficulty === 'advanced'}">Advanced</button>
+              <button class="mode-option-btn mode-option-btn-compact ${selectedDifficulty === 'expert' ? 'is-selected' : ''}" id="difficulty-expert-btn" aria-pressed="${selectedDifficulty === 'expert'}">Expert</button>
             </div>
             <p class="mode-select-description">${DIFFICULTY_DESCRIPTIONS[selectedDifficulty]}</p>
           </section>
@@ -1095,7 +1268,7 @@ function render(): void {
 
           <div class="mode-select-actions">
             <button class="start-btn" id="mode-select-start-btn">ゲーム開始</button>
-            <button class="next-btn" id="mode-select-back-btn">タイトルへ戻る</button>
+            <button class="next-btn" id="mode-select-back-btn">タイトルに戻る</button>
           </div>
         </div>
       </div>
@@ -1157,7 +1330,7 @@ function render(): void {
     root.innerHTML = `
       <div class="center-card">
         <div class="mode-select-screen">
-          <h1 class="mode-select-title">time attack 結果</h1>
+          <h1 class="mode-select-title">タイムアタックモードの結果</h1>
           <section class="mode-select-section">
             <h2 class="mode-select-heading">タイム</h2>
             <p class="time-attack-result-value">${formatTimeAttackMs(timeAttackResultTimeMs)}</p>
@@ -1168,7 +1341,7 @@ function render(): void {
           </section>
           <div class="mode-select-actions">
             <button class="start-btn" id="time-attack-retry-btn">もう一度プレイ</button>
-            <button class="next-btn" id="time-attack-title-btn">タイトルへ戻る</button>
+            <button class="next-btn" id="time-attack-title-btn">タイトルに戻る</button>
           </div>
         </div>
       </div>
@@ -1190,7 +1363,7 @@ function render(): void {
     root.innerHTML = `
       <div class="center-card">
         <div class="mode-select-screen">
-          <h1 class="mode-select-title">time challenge 結果</h1>
+          <h1 class="mode-select-title">チャレンジモードの結果</h1>
           <section class="mode-select-section">
             <h2 class="mode-select-heading">正解数</h2>
             <p class="time-attack-result-value">${timeChallengeResultCorrectCount}</p>
@@ -1201,7 +1374,7 @@ function render(): void {
           </section>
           <div class="mode-select-actions">
             <button class="start-btn" id="time-challenge-retry-btn">もう一度プレイ</button>
-            <button class="next-btn" id="time-challenge-title-btn">タイトルへ戻る</button>
+            <button class="next-btn" id="time-challenge-title-btn">タイトルに戻る</button>
           </div>
         </div>
       </div>
@@ -1232,10 +1405,14 @@ function render(): void {
   const headerQuestionProgress = `${String(timeAttackDisplayCount).padStart(2, '0')}/${TIME_ATTACK_QUESTION_LIMIT}`;
   const headerElapsedTime = formatTimeAttackMs(getTimeAttackTotalMs());
   const timeChallengeRemainingDisplay = formatTimeChallengeRemainingMs(getTimeChallengeRemainingMs());
-  const questionGaugeRatio = isTimeChallenge
-    ? Math.max(0, 1 - (getTimeChallengeQuestionElapsedMs() / TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS))
-    : 0;
+  const questionGaugeRemainingMs = isTimeChallenge ? getTimeChallengeGaugeRemainingMs() : 0;
+  const questionGaugeRatio = questionGaugeRemainingMs / TIME_CHALLENGE_QUESTION_GAUGE_MAX_MS;
   const questionGaugePercent = Math.round(questionGaugeRatio * 100);
+  const questionGaugeSeconds = Math.ceil(questionGaugeRemainingMs / 1000);
+  const questionGaugeValueText = isCountdown ? '開始前'
+    : isPaused ? '一時停止中'
+    : state === 'result' ? '判定中'
+    : `残り${questionGaugeSeconds}秒`;
   const showTimeChallengeNotice = Date.now() < timeChallengeNoticeUntil
     && timeChallengeNoticeVariant !== null
     && timeChallengeNoticeReason.length > 0
@@ -1276,8 +1453,11 @@ function render(): void {
           <span class="status-note-slot" aria-hidden="true"></span>
         </div>
         <div class="status-item status-item-wide">
-          <span class="status-label">正解ボーナス残り</span>
-          <span class="challenge-gauge">
+          <span class="status-label" id="time-challenge-gauge-label">正解ボーナス残り</span>
+          <span class="challenge-gauge" id="time-challenge-gauge" role="progressbar"
+            aria-labelledby="time-challenge-gauge-label" aria-valuemin="0"
+            aria-valuemax="${TIME_CHALLENGE_QUESTION_GAUGE_MAX_SECONDS}" aria-valuenow="${questionGaugeSeconds}"
+            aria-valuetext="${questionGaugeValueText}">
             <span class="challenge-gauge-fill" id="time-challenge-gauge-fill" style="width: ${questionGaugePercent}%"></span>
           </span>
           <span class="status-note-slot" aria-hidden="true"></span>
@@ -1325,12 +1505,12 @@ function render(): void {
               </span>
             </div>
           ` : ''}
-          <div class="tile-stack">
+          <div class="tile-stack" ${isPaused || isCountdown ? 'aria-hidden="true"' : ''}>
             ${discardRows.map((row) => `
               <div class="tile-row">
                 ${row.map((tile) => `
                   <div class="tile">
-                    <img class="tile-svg" src="${getTileSvgPath(tile)}" alt="${tile}" />
+                    <img class="tile-svg" src="${getTileSvgPath(tile)}" alt="${getTileName(tile)}" />
                   </div>
                 `).join('')}
               </div>
@@ -1342,10 +1522,11 @@ function render(): void {
           ${Array.from({ length: 19 }, (_, index) => {
             const value = index;
             const isSelected = selectedAnswer === value;
-            return `<button class="answer-btn ${isSelected ? 'selected' : ''}" data-value="${value}" ${isAnswerLocked ? 'disabled' : ''}>${value}</button>`;
+            return `<button class="answer-btn ${isSelected ? 'selected' : ''}" data-value="${value}" aria-pressed="${isSelected}" ${isAnswerLocked ? 'disabled' : ''}>${value}</button>`;
           }).join('')}
-          <button class="answer-btn enter-btn" id="quick-confirm-btn" aria-label="回答を確定" ${selectedAnswer === null || isAnswerLocked ? 'disabled' : ''}>
+          <button class="answer-btn enter-btn" id="quick-confirm-btn" aria-label="回答を確定（数字ボタン内）" ${selectedAnswer === null || isAnswerLocked ? 'disabled' : ''}>
             <span class="enter-icon" aria-hidden="true"></span>
+            <span aria-hidden="true">確定</span>
           </button>
         </div>
 

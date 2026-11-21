@@ -42,6 +42,40 @@ const tileSvgPathMap: Record<string, string> = {
   '7z': 'tiles/Regular/Chun.svg',
 };
 
+const tileNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+const tileNumberReadings = ['イー', 'リャン', 'サン', 'スー', 'ウー', 'ロー', 'チー', 'パー', 'キュー'];
+const tileSuits: Record<string, { name: string; reading: string }> = {
+  m: { name: '萬', reading: 'マン' },
+  p: { name: '筒', reading: 'ピン' },
+  s: { name: '索', reading: 'ソー' },
+};
+const honorTileNames = new Map([
+  ['1z', '東（トン）'],
+  ['2z', '南（ナン）'],
+  ['3z', '西（シャー）'],
+  ['4z', '北（ペー）'],
+  ['5z', '白（ハク）'],
+  ['6z', '發（ハツ）'],
+  ['7z', '中（チュン）'],
+]);
+
 export function getTileSvgPath(tileId: string): string {
   return buildAssetPath(tileSvgPathMap[tileId] ?? 'tiles/Regular/Man1.svg');
+}
+
+export function getTileName(tileId: string): string {
+  const honorName = honorTileNames.get(tileId);
+  if (honorName) {
+    return honorName;
+  }
+
+  const match = /^([1-9])([mps])$/.exec(tileId);
+  if (match) {
+    const index = Number(match[1]) - 1;
+    const suit = tileSuits[match[2]];
+    return `${tileNumbers[index]}${suit.name}（${tileNumberReadings[index]}${suit.reading}）`;
+  }
+
+  console.warn('Unknown tile identifier:', tileId);
+  return '不明な牌';
 }

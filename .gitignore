@@ -4,3 +4,4 @@ assets/*
 !assets/logo_image.*
 .vite/
 npm-debug.log*
+AGENTS.md
